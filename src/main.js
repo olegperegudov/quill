@@ -177,36 +177,61 @@ async function setupUpdates() {
   $("#version").textContent = "v" + (await invoke("get_current_version"));
 
   const btn = $("#update-btn");
+  let pendingVersion = null; // set once an update is known to be available
+
+  function markAvailable(version) {
+    pendingVersion = version;
+    btn.textContent = `install v${version}`;
+    btn.classList.add("ready");
+    btn.disabled = false;
+  }
+
+  function resetIdle() {
+    pendingVersion = null;
+    btn.textContent = "check update";
+    btn.classList.remove("ready");
+    btn.disabled = false;
+  }
+
+  // Download + install takes 20-30s and ends with the app restarting itself.
+  // Without live feedback the click feels dead — so we drive both the button
+  // and the (more visible) status line from the update-progress events.
+  async function startInstall() {
+    btn.classList.remove("ready");
+    btn.textContent = "downloading…";
+    btn.disabled = true;
+    setStatus("Downloading update…", "working");
+    try {
+      await invoke("install_update"); // on success the app restarts — no return
+    } catch (err) {
+      setStatus(`Update failed: ${err}`, "error");
+      markAvailable(pendingVersion); // let them retry
+    }
+  }
+
+  // One handler: click checks for an update, or installs the one we already found.
   btn.addEventListener("click", async () => {
+    if (pendingVersion) return startInstall();
     btn.textContent = "checking…";
     btn.disabled = true;
     try {
       const res = await invoke("check_for_update");
-      if (res.available) {
-        btn.textContent = `install v${res.version}`;
-        btn.classList.add("ready");
-        btn.disabled = false;
-        btn.onclick = async () => {
-          btn.textContent = "installing…";
-          btn.disabled = true;
-          try { await invoke("install_update"); }
-          catch (err) { setStatus(`Update failed: ${err}`, "error"); btn.disabled = false; }
-        };
-      } else {
-        btn.textContent = "up to date";
-        setTimeout(() => { btn.textContent = "check update"; btn.disabled = false; }, 2500);
-      }
+      if (res.available) markAvailable(res.version);
+      else { btn.textContent = "up to date"; setTimeout(resetIdle, 2500); }
     } catch (err) {
       btn.textContent = "check failed";
       setStatus(`Update check failed: ${err}`, "error");
-      setTimeout(() => { btn.textContent = "check update"; btn.disabled = false; }, 2500);
+      setTimeout(resetIdle, 2500);
     }
   });
 
-  // The Rust side lights this up on its own when a release appears.
-  await listen("update-available", (e) => {
-    btn.textContent = `install v${e.payload}`;
-    btn.classList.add("ready");
+  // Rust lights the button on its own when a release appears in the background.
+  await listen("update-available", (e) => markAvailable(e.payload));
+  // Live download progress.
+  await listen("update-progress", (e) => {
+    const pct = e.payload;
+    btn.textContent = `downloading ${pct}%`;
+    setStatus(`Downloading update… ${pct}%`, "working");
   });
 }
 

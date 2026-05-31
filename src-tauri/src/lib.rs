@@ -285,10 +285,12 @@ fn run_correction(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
         // ⌘C — otherwise the OS may still see ctrl/alt held and the copy is
         // sent as a different chord.
         std::thread::sleep(std::time::Duration::from_millis(60));
+        debug_log::log("hotkey fired → capturing selection");
         let _ = app.emit("status", "Capturing…");
 
         let outcome = (|| -> Result<Option<(String, String)>, String> {
             let original = selection::capture()?;
+            debug_log::log(&format!("captured {} chars from selection", original.chars().count()));
             if original.is_empty() {
                 return Ok(None);
             }

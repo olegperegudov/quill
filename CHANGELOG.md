@@ -3,6 +3,20 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.8 — update progress feedback + flow logging
+
+- The update button gave no feedback during the 20-30s download — the click felt
+  dead. It now shows live progress ("downloading 45%") and mirrors it in the
+  status line, driven by the `update-progress` events the Rust side already
+  emitted but the UI ignored (mirrors Ribbit). Also collapsed the update click
+  logic into a single handler (no more stray `onclick` double-firing with the
+  `addEventListener` one).
+- Instrumented the correction flow: logs "hotkey fired → capturing" and
+  "captured N chars" so a silent no-op is diagnosable from the debug log instead
+  of leaving no trace. (Verified the full select→correct→insert path end-to-end
+  on macOS via a synthetic hotkey against TextEdit — works; the engine, capture,
+  and insert are all fine.)
+
 ## 0.1.7 — fix crash when triggering a correction (macOS)
 
 **What:** pressing the hotkey instantly crashed Quill on macOS (SIGTRAP).
