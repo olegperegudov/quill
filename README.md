@@ -1,51 +1,115 @@
-# Quill ✒
+<p align="center">
+  <img src="src/quill.png" width="96" alt="Quill logo" />
+</p>
 
-Polish your writing in place. Select text in **any** app — chat, email, Jira,
-a browser form — press a global hotkey, and Quill quietly fixes spelling,
-punctuation and grammar (Russian **and** English) without changing your meaning
-or tone, typing the corrected text back over your selection.
+<h1 align="center">Quill ✒</h1>
 
-No window to switch to, no copy-paste. The hotkey is the whole interface.
+<p align="center">
+  Polish your writing in place, in any app, on Windows and macOS.<br/>
+  Select text, press a hotkey — spelling, punctuation and grammar fixed, your meaning untouched.
+</p>
+
+<p align="center">
+  <i>Highlight the mess, then tap the key —<br/>
+  Quill tidies the typos quietly.<br/>
+  Your tone, your words, your meaning stay,<br/>
+  just the slips and commas swept away.</i> ✒
+</p>
+
+<p align="center">
+  <b>Russian and English</b> — language detected automatically, never translated<br/>
+  <b>Private by design</b> — text goes only to your chosen model, history stays local, no telemetry
+</p>
 
 ## How it works
 
-1. You select text and press the hotkey (default `⌃⌥E`).
-2. Quill copies the selection, sends it to an LLM with a strict "correct, don't
-   rewrite" prompt, and types the result back over the selection.
-3. Your clipboard is borrowed for a fraction of a second during capture and put
-   back exactly as it was — Quill inserts by typing, never by pasting.
+1. **Select** text in any app — a chat, an email, Jira, a browser form
+2. Press **Ctrl+Alt+E** (customizable)
+3. Quill sends the selection to an LLM that fixes spelling, punctuation and grammar — without changing your meaning or tone
+4. The corrected text is typed back **over your selection**
 
-Language is detected automatically; a casual message stays casual. If nothing is
-selected, or the model would change nothing, Quill does nothing.
+No window to switch to, no copy-paste. If nothing is selected, or the text is already clean, Quill does nothing. Your clipboard is borrowed for a split second to read the selection, then restored exactly as it was.
 
-## Setup
+## Quick start
 
-1. Open Quill (it lives in the menu-bar / tray).
-2. Pick a model provider and paste its API key — stored in the OS keychain.
-3. Select some text anywhere and hit the hotkey.
+### 1. Download
 
-On macOS, grant **Accessibility** when prompted — Quill needs it to read the
-selection and type the correction.
+<p>
+  <a href="https://github.com/olegperegudov/quill/releases/latest"><img src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>&nbsp;
+  <a href="https://github.com/olegperegudov/quill/releases/latest"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Apple_Silicon-000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Apple Silicon" /></a>&nbsp;
+  <a href="https://github.com/olegperegudov/quill/releases/latest"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Intel-666?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Intel" /></a>
+</p>
+
+Grab the installer for your platform from the [Releases](https://github.com/olegperegudov/quill/releases/latest) page:
+
+- **Windows** — `Quill_x.y.z_x64-setup.exe`
+- **macOS (Apple Silicon)** — `Quill_x.y.z_aarch64.dmg`
+- **macOS (Intel)** — `Quill_x.y.z_x64.dmg`
+
+On macOS the app isn't notarized yet, so the first launch is **right-click → Open** (then **Open** again) to get past Gatekeeper. You'll also be asked to grant **Accessibility** — Quill needs it to read your selection and type the correction.
+
+### 2. Get an API key
+
+Quill talks to any OpenAI-compatible model. Pick one provider and get its key:
+
+- [**RouterAI**](https://routerai.ru) (default) · [**OpenAI**](https://platform.openai.com/api-keys) · [**OpenRouter**](https://openrouter.ai/keys)
+
+Grammar fixes are tiny requests, so this costs pennies.
+
+### 3. Paste the key into Quill
+
+Open Quill (it lives in the menu-bar / tray), pick your provider, and paste the key. It's stored in your OS keychain. Done — select some text anywhere and hit the hotkey.
+
+## Features
+
+- **Fix in place** — highlight text in any app, press the hotkey, corrected text replaces it
+- **Bilingual** — Russian and English, detected automatically, never translated
+- **Keeps your voice** — fixes errors, never rewrites your meaning, tone or register
+- **Works everywhere** — global hotkey from any app (desktop messengers, browser, mail), even when minimized to tray
+- **Leaves your clipboard alone** — inserts by typing; the clipboard is only read, then restored
+- **Local history** — see exactly what changed (original → corrected); retention is configurable
+- **Key in the OS keychain** — not a plaintext file
+- **System tray** — runs quietly in the background, X hides to tray
+- **Auto-update** — checks on its own, one-click install from the window
+- **Customizable hotkey** — click the hotkey, press your combo
 
 ## Privacy
 
-Selected text is sent to the model provider you configure (RouterAI by default).
-A local, on-device history of corrections is kept so you can see what changed;
-its retention is configurable and it never leaves your machine.
+- Selected text is sent to **your chosen provider** for correction only — nothing else leaves your machine
+- Your API key is stored in the **OS keychain** (macOS Keychain / Windows Credential Manager)
+- Correction history is stored locally and pruned to your retention window; it never leaves your machine
+- No analytics, no tracking, no telemetry — the only network call is to the model you picked
+- Fully open source — inspect every line
 
-## Development
+## Settings
 
-A Tauri v2 app (Rust core + a small HTML/JS settings window), forked from
-[Ribbit](https://github.com/olegperegudov/ribbit). Verification is via the
-in-app updater after a CI release — see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
-Engineering notes live in [CHANGELOG.md](CHANGELOG.md).
+| Setting | Description |
+|---------|-------------|
+| **Model** | Choose your provider (RouterAI / OpenAI / OpenRouter) |
+| **API key** | Paste your provider key — stored in the OS keychain |
+| **Hotkey** | Click to customize, press your combo |
+| **Debug log** | View internal logs for troubleshooting |
+| **Version** | Click to view the changelog |
+| **Check update** | Manually check for a new version |
 
+## Tech stack
+
+- [Tauri 2](https://tauri.app/) — Rust backend, HTML/CSS/JS frontend
+- OpenAI-compatible chat completions — RouterAI / OpenAI / OpenRouter
+- [Enigo](https://github.com/enigo-rs/enigo) — synthetic keyboard input (copy + type)
+- [arboard](https://github.com/1Password/arboard) — read the selection from the clipboard
+- [keyring](https://github.com/hwchen/keyring-rs) — API key in the OS keychain
+
+## Building from source
+
+```bash
+# Prerequisites: Node.js, Rust toolchain
+npm install
+npm run tauri build
 ```
-src-tauri/src/
-  lib.rs        hotkey → capture → correct → insert, tray, updater
-  selection.rs  grab the current selection (synthetic Copy + clipboard)
-  corrector.rs  call the LLM, return corrected text (the prompt lives here)
-  inserter.rs   type the result over the selection
-  secrets.rs    API key in the OS keychain
-src/            settings window (index.html / main.js / styles.css)
-```
+
+The installer lands in `src-tauri/target/release/bundle/`.
+
+## License
+
+MIT
