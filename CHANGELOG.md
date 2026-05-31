@@ -3,6 +3,15 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.2 — real Quill icon
+
+Replaced the inherited Ribbit frog placeholder with Quill's own icon: a white
+feather on a violet-ink gradient squircle (matches the app's accent colour).
+Source rendered from an SVG; full icon set regenerated via `tauri icon`. Dropped
+the iOS/Android icon variants `tauri icon` emits — Quill is desktop-only. Added
+`src/quill.png` (256px) for the GitHub profile card. First change to ride the
+CI → in-app-update loop end to end.
+
 ## 0.1.0 — initial build (forked from Ribbit)
 
 First version. Quill is the text-correction twin of Ribbit (voice-to-text):
