@@ -42,7 +42,13 @@ No window to switch to, no copy-paste. If nothing is selected, or the text is al
 
 Each button downloads the right installer for that platform directly — no picking from a list. (Want to choose yourself or grab an older build? The [Releases](https://github.com/olegperegudov/quill/releases/latest) page lists every file.)
 
-On macOS the app isn't notarized yet, so the first launch is **right-click → Open** (then **Open** again) to get past Gatekeeper. You'll also be asked to grant **Accessibility** — Quill needs it to read your selection and type the correction.
+On macOS the app isn't notarized (no paid Apple Developer account), so on the **first** open macOS will call it *"damaged"*. It isn't — that's just how macOS treats unsigned downloads on Apple Silicon. Clear it once in Terminal:
+
+```bash
+xattr -cr /Applications/Quill.app
+```
+
+then open Quill normally. You won't hit this again — later updates install themselves through the app and aren't flagged. On first use you'll also be asked to grant **Accessibility** — Quill needs it to read your selection and type the correction back.
 
 ### 2. Get an API key
 
