@@ -1,0 +1,221 @@
+name: Build Quill
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Auto-bump patch version, commit, and tag
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+      skipped: ${{ steps.bump.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Auto-bump version
+        id: bump
+        run: |
+          # Read current version from tauri.conf.json
+          CURRENT=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          echo "Current version: $CURRENT"
+
+          # Check if this commit already has a tag (avoid re-bumping version commits)
+          if git describe --exact-match HEAD 2>/dev/null; then
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "Commit already tagged, skipping"
+            exit 0
+          fi
+
+          # Check if last commit was a version bump (avoid infinite loop)
+          LAST_MSG=$(git log -1 --pretty=%s)
+          if [[ "$LAST_MSG" == v* ]] || [[ "$LAST_MSG" == *"auto-bump"* ]]; then
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "Last commit was version bump, skipping"
+            exit 0
+          fi
+
+          # Bump patch version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          PATCH=$((PATCH + 1))
+          NEW="$MAJOR.$MINOR.$PATCH"
+          TAG="v$NEW"
+          echo "Bumping to: $NEW"
+
+          # Update version in all files
+          python3 -c "
+          import json
+          for f in ['src-tauri/tauri.conf.json']:
+              d = json.load(open(f))
+              d['version'] = '$NEW'
+              json.dump(d, open(f, 'w'), indent=2)
+              print(f'Updated {f}')
+          "
+
+          sed -i "s/^version = \"$CURRENT\"/version = \"$NEW\"/" src-tauri/Cargo.toml
+          sed -i "s/v$CURRENT/v$NEW/" src/index.html
+
+          # Commit and tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "$TAG auto-bump"
+          git tag "$TAG"
+          git push origin main "$TAG"
+
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+  # Run JS unit tests before any platform build. Rust tests run inside each
+  # platform build (below) so we don't need to install Linux GTK deps just
+  # to compile the Tauri crate on ubuntu.
+  test:
+    needs: version
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: JS unit tests (vitest)
+        run: npm test
+
+  build-windows:
+    needs: [version, test]
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Rust unit tests
+        working-directory: src-tauri
+        # Use absolute path — macos-latest has a `cargo` shim earlier in PATH
+        # that ignores rustup syntax; dtolnay installs the real cargo here.
+        shell: bash
+        run: "$HOME/.cargo/bin/cargo test --lib"
+
+      - name: Set signing key
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          {
+            echo 'TAURI_SIGNING_PRIVATE_KEY<<__EOF__'
+            printf '%s' "$SIGNING_KEY"
+            echo ''
+            echo '__EOF__'
+          } >> "$GITHUB_ENV"
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          args: --target x86_64-pc-windows-msvc --bundles nsis
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Quill ${{ needs.version.outputs.tag }}
+          releaseBody: "See the assets below to download and install."
+          releaseDraft: false
+          prerelease: false
+
+  build-macos:
+    needs: [version, test]
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Rust unit tests
+        working-directory: src-tauri
+        # Use absolute path — macos-latest has a `cargo` shim earlier in PATH
+        # that ignores rustup syntax; dtolnay installs the real cargo here.
+        shell: bash
+        run: "$HOME/.cargo/bin/cargo test --lib"
+
+      - name: Build Tauri app (Apple Silicon)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          args: --target aarch64-apple-darwin --bundles app,dmg
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Quill ${{ needs.version.outputs.tag }}
+          releaseBody: "See the assets below to download and install."
+          releaseDraft: false
+          prerelease: false
+
+      - name: Build Tauri app (Intel)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          args: --target x86_64-apple-darwin --bundles app,dmg
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Quill ${{ needs.version.outputs.tag }}
+          releaseBody: "See the assets below to download and install."
+          releaseDraft: false
+          prerelease: false
