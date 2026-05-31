@@ -3,6 +3,15 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.9 — menu-bar "working" indicator
+
+The settings window lives in the tray, so when you trigger a correction from
+another app (Telegram, a browser) there was no on-screen sign anything was
+happening during the ~3s LLM round-trip — it read as "nothing happens / broken".
+Now the menu-bar tray shows a "…" while a correction is in flight and clears when
+done. (Verified end-to-end that the correction itself works — incl. in Telegram;
+the menu-bar glyph rendering couldn't be eyeballed from the build environment.)
+
 ## 0.1.8 — update progress feedback + flow logging
 
 - The update button gave no feedback during the 20-30s download — the click felt

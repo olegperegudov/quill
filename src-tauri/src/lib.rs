@@ -286,6 +286,7 @@ fn run_correction(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
         // sent as a different chord.
         std::thread::sleep(std::time::Duration::from_millis(60));
         debug_log::log("hotkey fired → capturing selection");
+        set_tray_busy(&app, true);
         let _ = app.emit("status", "Capturing…");
 
         let outcome = (|| -> Result<Option<(String, String)>, String> {
@@ -339,6 +340,7 @@ fn run_correction(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
             }
         }
 
+        set_tray_busy(&app, false);
         state.lock().unwrap().busy = false;
     });
 }
@@ -395,6 +397,16 @@ fn toggle_main_window<R: tauri::Runtime>(app: &AppHandle<R>, label: &tauri::menu
         let _ = w.show();
         let _ = w.set_focus();
         let _ = label.set_text("Hide Quill");
+    }
+}
+
+/// Brief "working" indicator in the menu bar while a correction runs. The
+/// settings window is usually hidden in the tray, so without this the ~3s LLM
+/// round-trip looks like nothing is happening — which reads as "it's broken".
+fn set_tray_busy(app: &AppHandle, busy: bool) {
+    if let Some(tray) = app.tray_by_id("tray") {
+        let title: Option<String> = if busy { Some("…".into()) } else { None };
+        let _ = tray.set_title(title);
     }
 }
 
@@ -474,7 +486,7 @@ pub fn run() {
             let show_for_menu = show.clone();
             let show_for_tray = show.clone();
 
-            let mut tray_builder = TrayIconBuilder::new()
+            let mut tray_builder = TrayIconBuilder::with_id("tray")
                 .tooltip("Quill — polish your writing")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
