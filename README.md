@@ -24,7 +24,7 @@
 ## How it works
 
 1. **Select** text in any app — a chat, an email, Jira, a browser form
-2. Press **Ctrl+Alt+E** (customizable)
+2. Press the hotkey — **⌃⌥E** on macOS, **Ctrl + Alt + E** on Windows (customizable)
 3. Quill sends the selection to an LLM that fixes spelling, punctuation and grammar — without changing your meaning or tone
 4. The corrected text is typed back **over your selection**
 

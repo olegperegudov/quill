@@ -3,6 +3,16 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.x — platform-correct hotkey labels
+
+The hotkey was rendered in Windows form ("ctrl+alt+e") everywhere, including on
+macOS, where it should read ⌃⌥E. The stored binding is unchanged (Tauri's
+lowercase form — the same physical keys on both OSes); only the *label* is now
+platform-aware: glyphs with no separators on macOS (⌃⌥E, ⌘⇧Space), spelled-out
+"Ctrl + Alt + E" on Windows. Applied in the window, the live capture display, and
+the status line. New `prettyShortcut(raw, isMac)` helper in shortcut.js, unit-
+tested both ways. README "How it works" now shows both forms.
+
 ## 0.1.3 — one-click platform downloads
 
 The README download buttons now link **straight to the installer** for each

@@ -4,13 +4,18 @@
 //! side owns. This UI just lets you set the model + key and the hotkey, and
 //! shows a live status plus a local history of what got corrected.
 
-import { shortcutFromEvent } from "./shortcut.js";
+import { shortcutFromEvent, prettyShortcut } from "./shortcut.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { getCurrentWindow } = window.__TAURI__.window;
 
 const $ = (sel) => document.querySelector(sel);
+
+// Show the hotkey the way each OS writes it (⌃⌥E on Mac, "Ctrl + Alt + E" on
+// Windows) while the stored binding stays Tauri's lowercase form.
+const IS_MAC = navigator.userAgent.includes("Mac");
+const pretty = (raw) => prettyShortcut(raw, IS_MAC);
 
 // Diagnostics without DevTools (disabled in prod builds): goes to the debug log.
 function dlog(msg) {
@@ -145,11 +150,11 @@ function setupShortcutCapture() {
     if (e.key === "Escape") {
       capturing = false;
       disp.classList.remove("capturing");
-      disp.textContent = await invoke("get_shortcut");
+      disp.textContent = pretty(await invoke("get_shortcut"));
       return;
     }
     const { parts, complete } = shortcutFromEvent(e);
-    disp.textContent = parts.join("+") || "press keys…";
+    disp.textContent = parts.length ? pretty(parts.join("+")) : "press keys…";
     if (!complete) return;
 
     const shortcut = parts.join("+");
@@ -157,10 +162,10 @@ function setupShortcutCapture() {
     disp.classList.remove("capturing");
     try {
       await invoke("set_shortcut", { shortcut });
-      disp.textContent = shortcut;
-      setStatus(`Hotkey set to ${shortcut}`, "done");
+      disp.textContent = pretty(shortcut);
+      setStatus(`Hotkey set to ${pretty(shortcut)}`, "done");
     } catch (err) {
-      disp.textContent = await invoke("get_shortcut");
+      disp.textContent = pretty(await invoke("get_shortcut"));
       setStatus(`Couldn't set hotkey: ${err}`, "error");
     }
   });
@@ -259,7 +264,7 @@ async function main() {
 
   // Initial state
   const cfg = await refreshConfig();
-  $("#shortcut-display").textContent = await invoke("get_shortcut");
+  $("#shortcut-display").textContent = pretty(await invoke("get_shortcut"));
   setupShortcutCapture();
   await setupUpdates();
   await loadHistory();
