@@ -3,7 +3,29 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
-## 0.1.x — platform-correct hotkey labels
+## 0.1.7 — fix crash when triggering a correction (macOS)
+
+**What:** pressing the hotkey instantly crashed Quill on macOS (SIGTRAP).
+
+**Was:** selection capture synthesized ⌘C with `enigo.key(Key::Unicode('c'))`.
+On macOS that makes enigo resolve the keycode through the Text Input Source APIs
+(TSM / HIToolbox), which `dispatch_assert_queue` the **main thread** and abort the
+process when called from our worker thread — and the whole correction flow runs
+on a worker thread. The ⌘ modifier was fine (fixed keycode); only the
+layout-dependent `'c'` lookup tripped the assert. (`enigo.text()`, used to type
+the result, takes the CGEvent Unicode path and is safe off-main — which is why
+Ribbit, which only ever types, never hit this.)
+
+**Now:** on macOS we send the raw keycode of the physical C key
+(`Key::Other(0x08)` = kVK_ANSI_C), which skips the TSM lookup — no main-thread
+requirement, no crash. Bonus: ⌘C now fires regardless of the active keyboard
+layout (e.g. a Cyrillic layout), which suits a bilingual tool. Windows keeps
+`Key::Unicode('c')` (no TSM there).
+
+**Tests:** a guard test pins the macOS copy key as a raw keycode (never
+`Key::Unicode`), so this crash class can't quietly return.
+
+## 0.1.6 — platform-correct hotkey labels
 
 The hotkey was rendered in Windows form ("ctrl+alt+e") everywhere, including on
 macOS, where it should read ⌃⌥E. The stored binding is unchanged (Tauri's

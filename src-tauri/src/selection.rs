@@ -24,6 +24,20 @@ const COPY_MODIFIER: Key = Key::Meta;
 #[cfg(not(target_os = "macos"))]
 const COPY_MODIFIER: Key = Key::Control;
 
+// The "C" of the copy chord.
+//
+// On macOS we send the *raw* keycode of the physical C key (kVK_ANSI_C = 0x08),
+// NOT `Key::Unicode('c')`. `Key::Unicode` makes enigo resolve the keycode through
+// the macOS Text Input Source APIs (TSM/HIToolbox), which assert they run on the
+// main thread and hard-crash the process (SIGTRAP) when called from our worker
+// thread — which is exactly where capture() runs. The raw keycode skips that
+// lookup entirely, and as a bonus ⌘C then fires regardless of the active layout
+// (e.g. a Cyrillic layout), which is what we want for a bilingual tool.
+#[cfg(target_os = "macos")]
+const COPY_KEY: Key = Key::Other(0x08);
+#[cfg(not(target_os = "macos"))]
+const COPY_KEY: Key = Key::Unicode('c');
+
 /// Grab the current selection. Returns the trimmed selected text, or an empty
 /// string when nothing is selected. The user's prior clipboard is restored
 /// before returning.
@@ -64,7 +78,7 @@ fn send_copy() -> Result<(), String> {
         .key(COPY_MODIFIER, Direction::Press)
         .map_err(|e| format!("modifier press: {}", e))?;
     enigo
-        .key(Key::Unicode('c'), Direction::Click)
+        .key(COPY_KEY, Direction::Click)
         .map_err(|e| format!("c click: {}", e))?;
     enigo
         .key(COPY_MODIFIER, Direction::Release)
@@ -82,5 +96,23 @@ fn restore(clipboard: &mut Clipboard, saved: Option<String>) {
         None => {
             let _ = clipboard.clear();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression guard for a real crash: on macOS, routing the copy key through
+    // `Key::Unicode` triggers a main-thread-only Text Input Source lookup and
+    // SIGTRAPs the process from our worker thread. The copy key MUST stay a raw
+    // keycode there. (No test on other platforms — Unicode is fine off-main.)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_copy_key_is_raw_keycode_not_unicode() {
+        assert!(
+            matches!(COPY_KEY, Key::Other(_)),
+            "macOS copy key must be a raw keycode, not Key::Unicode (off-main TSM crash)"
+        );
     }
 }
