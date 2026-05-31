@@ -3,6 +3,19 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.3 — one-click platform downloads
+
+The README download buttons now link **straight to the installer** for each
+platform instead of dumping you on the Releases page full of every file.
+
+The snag: tauri names assets with the version baked in (`Quill_<ver>_aarch64.dmg`),
+and GitHub's stable `releases/latest/download/<name>` redirect needs an exact,
+unchanging filename. Fix: CI now re-uploads version-less copies to each release
+— `Quill_macOS_AppleSilicon.dmg`, `Quill_macOS_Intel.dmg`, `Quill_Windows_Setup.exe`
+(via `gh release upload --clobber` after each build) — and the README buttons
+point at those. The versioned files + `.sig` + `latest.json` still ship for the
+auto-updater; the stable names are purely for the human download buttons.
+
 ## 0.1.2 — real Quill icon
 
 Replaced the inherited Ribbit frog placeholder with Quill's own icon: a white

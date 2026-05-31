@@ -35,16 +35,12 @@ No window to switch to, no copy-paste. If nothing is selected, or the text is al
 ### 1. Download
 
 <p>
-  <a href="https://github.com/olegperegudov/quill/releases/latest"><img src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>&nbsp;
-  <a href="https://github.com/olegperegudov/quill/releases/latest"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Apple_Silicon-000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Apple Silicon" /></a>&nbsp;
-  <a href="https://github.com/olegperegudov/quill/releases/latest"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Intel-666?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Intel" /></a>
+  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_Windows_Setup.exe"><img src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>&nbsp;
+  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_macOS_AppleSilicon.dmg"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Apple_Silicon-000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Apple Silicon" /></a>&nbsp;
+  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_macOS_Intel.dmg"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Intel-666?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Intel" /></a>
 </p>
 
-Grab the installer for your platform from the [Releases](https://github.com/olegperegudov/quill/releases/latest) page:
-
-- **Windows** — `Quill_x.y.z_x64-setup.exe`
-- **macOS (Apple Silicon)** — `Quill_x.y.z_aarch64.dmg`
-- **macOS (Intel)** — `Quill_x.y.z_x64.dmg`
+Each button downloads the right installer for that platform directly — no picking from a list. (Want to choose yourself or grab an older build? The [Releases](https://github.com/olegperegudov/quill/releases/latest) page lists every file.)
 
 On macOS the app isn't notarized yet, so the first launch is **right-click → Open** (then **Open** again) to get past Gatekeeper. You'll also be asked to grant **Accessibility** — Quill needs it to read your selection and type the correction.
 

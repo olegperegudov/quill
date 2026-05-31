@@ -156,6 +156,19 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+      # Re-upload the installer under a stable, version-less name so the
+      # README "Download for Windows" button can link straight to the file
+      # (releases/latest/download/<name>) and never break on a version bump.
+      - name: Publish stable-named Windows installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          exe=$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe | head -1)
+          cp "$exe" Quill_Windows_Setup.exe
+          gh release upload "$TAG" Quill_Windows_Setup.exe --clobber --repo "$GITHUB_REPOSITORY"
+
   build-macos:
     needs: [version, test]
     if: needs.version.outputs.skipped != 'true'
@@ -219,3 +232,17 @@ jobs:
           releaseBody: "See the assets below to download and install."
           releaseDraft: false
           prerelease: false
+
+      # Stable, version-less copies for the README download buttons (both
+      # Macs). Direct links: releases/latest/download/Quill_macOS_*.dmg.
+      - name: Publish stable-named macOS installers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          arm=$(ls src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg | head -1)
+          intel=$(ls src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg | head -1)
+          cp "$arm" Quill_macOS_AppleSilicon.dmg
+          cp "$intel" Quill_macOS_Intel.dmg
+          gh release upload "$TAG" Quill_macOS_AppleSilicon.dmg Quill_macOS_Intel.dmg --clobber --repo "$GITHUB_REPOSITORY"
