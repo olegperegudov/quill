@@ -19,6 +19,7 @@ mod corrector;
 mod debug_log;
 mod inserter;
 mod logger;
+mod mac_focus;
 mod mac_window;
 mod secrets;
 mod selection;
@@ -37,10 +38,13 @@ const BUNDLE_ID: &str = "com.quill.app";
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
 
 struct AppState {
-    /// True while a correction is in flight — guards against the hotkey
-    /// re-firing (key repeat, double-tap) before the previous run finishes.
+    /// True while a capture is in flight — guards against the hotkey re-firing
+    /// (key repeat, double-tap) before the previous run finishes.
     busy: bool,
     current_shortcut: String,
+    /// PID of the app that was frontmost when the hotkey fired, so "Apply" can
+    /// re-activate it and type the result back. None off-macOS or if unknown.
+    target_pid: Option<i32>,
 }
 
 #[tauri::command]
@@ -266,10 +270,12 @@ fn set_shortcut(
     Ok(())
 }
 
-/// The whole job, kicked off by the hotkey: grab selection → correct → type it
-/// back. Runs on its own thread so the LLM round-trip never blocks the hotkey
-/// handler. Re-entrancy is guarded by `AppState::busy`.
-fn run_correction(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
+/// Hotkey entry point: grab the selection and open the editor window over it,
+/// remembering which app was frontmost so we can type the result back later.
+/// The actual LLM round-trip is kicked off from the editor (editor_correct), so
+/// this only does the fast capture. Runs on its own thread so the hotkey handler
+/// never blocks; re-entrancy is guarded by `AppState::busy`.
+fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
     {
         let mut s = state.lock().unwrap();
         if s.busy {
@@ -281,68 +287,113 @@ fn run_correction(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
     let app = app.clone();
     let state = Arc::clone(state);
     std::thread::spawn(move || {
-        // Let the hotkey's modifier keys fully release before we synthesize
-        // ⌘C — otherwise the OS may still see ctrl/alt held and the copy is
-        // sent as a different chord.
+        // Remember the target app while it's still frontmost — our editor window
+        // hasn't been shown yet, so whatever is frontmost now is where the text
+        // came from and where it must go back.
+        let target_pid = mac_focus::remember_frontmost();
+
+        // Let the hotkey's modifier keys fully release before we synthesize ⌘C —
+        // otherwise the OS may still see ctrl/alt held and copy a different chord.
         std::thread::sleep(std::time::Duration::from_millis(60));
         debug_log::log("hotkey fired → capturing selection");
-        set_tray_busy(&app, true);
-        let _ = app.emit("status", "Capturing…");
 
-        let outcome = (|| -> Result<Option<(String, String)>, String> {
-            let original = selection::capture()?;
-            debug_log::log(&format!("captured {} chars from selection", original.chars().count()));
-            if original.is_empty() {
-                return Ok(None);
-            }
-            let cfg = read_config();
-            let provider_name = cfg["llm_provider"]
-                .as_str()
-                .unwrap_or(corrector::DEFAULT_PROVIDER);
-            let provider = corrector::find_provider(provider_name)
-                .unwrap_or_else(|| corrector::find_provider(corrector::DEFAULT_PROVIDER).unwrap());
-            let key = std::env::var(provider.env_var).unwrap_or_default();
-            if key.is_empty() {
-                return Err(format!("No API key for {} — open Quill settings.", provider.label));
-            }
-            let _ = app.emit("status", "Polishing…");
-            let corrected = corrector::correct_text(&original, provider, &key)?;
-            Ok(Some((original, corrected)))
-        })();
-
-        match outcome {
-            Ok(None) => {
-                let _ = app.emit("status", "Nothing selected");
-            }
-            Ok(Some((original, corrected))) => {
-                logger::log_correction(&original, &corrected);
-                let _ = app.emit(
-                    "correction",
-                    serde_json::json!({ "original": original, "corrected": corrected }),
-                );
-                if corrected == original {
-                    // Nothing to change — don't re-type identical text.
-                    let _ = app.emit("status", "Already clean ✓");
+        match selection::capture() {
+            Ok(text) if !text.is_empty() => {
+                debug_log::log(&format!(
+                    "captured {} chars, target pid {:?}",
+                    text.chars().count(),
+                    target_pid
+                ));
+                state.lock().unwrap().target_pid = target_pid;
+                if let Some(w) = app.get_webview_window("editor") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                    let _ = app.emit("editor:open", &text);
                 } else {
-                    // Brief pause so focus has settled back in the target app.
-                    std::thread::sleep(std::time::Duration::from_millis(120));
-                    if let Err(e) = inserter::insert_text(&corrected) {
-                        debug_log::log(&format!("insert error: {}", e));
-                        let _ = app.emit("error", format!("Couldn't insert text: {}", e));
-                    } else {
-                        let _ = app.emit("status", "Done ✓");
-                    }
+                    debug_log::log("editor window missing — cannot open");
                 }
             }
-            Err(e) => {
-                debug_log::log(&format!("correction error: {}", e));
-                let _ = app.emit("error", e);
-            }
+            Ok(_) => debug_log::log("nothing selected — editor not opened"),
+            Err(e) => debug_log::log(&format!("capture error: {}", e)),
         }
 
-        set_tray_busy(&app, false);
         state.lock().unwrap().busy = false;
     });
+}
+
+/// Resolve the active provider and its API key from config + env. Shared by the
+/// editor's correction commands.
+fn resolve_provider_and_key() -> Result<(&'static corrector::ProviderConfig, String), String> {
+    let cfg = read_config();
+    let provider_name = cfg["llm_provider"]
+        .as_str()
+        .unwrap_or(corrector::DEFAULT_PROVIDER);
+    let provider = corrector::find_provider(provider_name)
+        .unwrap_or_else(|| corrector::find_provider(corrector::DEFAULT_PROVIDER).unwrap());
+    let key = std::env::var(provider.env_var).unwrap_or_default();
+    if key.is_empty() {
+        return Err(format!("Нет ключа API для {} — открой настройки Quill.", provider.label));
+    }
+    Ok((provider, key))
+}
+
+/// Correct the editor's text. Async + spawn_blocking so the editor UI keeps
+/// animating during the LLM round-trip.
+#[tauri::command]
+async fn editor_correct(text: String) -> Result<String, String> {
+    let (provider, key) = resolve_provider_and_key()?;
+    tauri::async_runtime::spawn_blocking(move || corrector::correct_text(&text, provider, &key))
+        .await
+        .map_err(|e| format!("correction task failed: {}", e))?
+}
+
+/// Apply the edited text: record it in history, hide the editor, re-activate the
+/// app that was frontmost when the hotkey fired, and type the text over its
+/// (still-present) selection.
+#[tauri::command]
+fn apply_correction(
+    app: AppHandle,
+    original: String,
+    text: String,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) {
+    logger::log_correction(&original, &text);
+    let _ = app.emit(
+        "correction",
+        serde_json::json!({ "original": original, "corrected": text }),
+    );
+
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.hide();
+    }
+
+    let target_pid = state.lock().unwrap().target_pid;
+    let app_for_thread = app.clone();
+    std::thread::spawn(move || {
+        if let Some(pid) = target_pid {
+            // AppKit window activation is main-thread work; queue it there, then
+            // give focus a moment to settle before typing.
+            let _ = app_for_thread.run_on_main_thread(move || {
+                if let Err(e) = mac_focus::activate(pid) {
+                    debug_log::log(&format!("apply: activate failed: {}", e));
+                }
+            });
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        if let Err(e) = inserter::insert_text(&text) {
+            debug_log::log(&format!("apply: insert failed: {}", e));
+        } else {
+            debug_log::log(&format!("applied {} chars", text.chars().count()));
+        }
+    });
+}
+
+/// Cancel: hide the editor without typing anything back.
+#[tauri::command]
+fn close_editor(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.hide();
+    }
 }
 
 /// On a dev machine where `~/membeme/system/secrets/routerai.key` exists, seed
@@ -400,16 +451,6 @@ fn toggle_main_window<R: tauri::Runtime>(app: &AppHandle<R>, label: &tauri::menu
     }
 }
 
-/// Brief "working" indicator in the menu bar while a correction runs. The
-/// settings window is usually hidden in the tray, so without this the ~3s LLM
-/// round-trip looks like nothing is happening — which reads as "it's broken".
-fn set_tray_busy(app: &AppHandle, busy: bool) {
-    if let Some(tray) = app.tray_by_id("tray") {
-        let title: Option<String> = if busy { Some("…".into()) } else { None };
-        let _ = tray.set_title(title);
-    }
-}
-
 fn register_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> {
     use tauri_plugin_global_shortcut::ShortcutState;
     app.global_shortcut()
@@ -418,7 +459,7 @@ fn register_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> 
             // synthesize ⌘C. Pressed is ignored.
             if event.state() == ShortcutState::Released {
                 let state = app.state::<Arc<Mutex<AppState>>>();
-                run_correction(state.inner(), app);
+                launch_editor(state.inner(), app);
             }
         })
         .map_err(|e| {
@@ -451,6 +492,7 @@ pub fn run() {
     let state = Arc::new(Mutex::new(AppState {
         busy: false,
         current_shortcut: saved_shortcut,
+        target_pid: None,
     }));
 
     tauri::Builder::default()
@@ -473,7 +515,10 @@ pub fn run() {
             set_always_on_top,
             check_for_update,
             install_update,
-            get_current_version
+            get_current_version,
+            editor_correct,
+            apply_correction,
+            close_editor
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -514,12 +559,15 @@ pub fn run() {
             let _tray = tray_builder.build(app)?;
 
             // macOS-only window polish: rounded corners + follow active Space.
-            if let Some(main_window) = app.get_webview_window("main") {
-                if let Err(e) = mac_window::apply_rounded_corners(&main_window, 10.0) {
-                    debug_log::log(&format!("rounded corners: {}", e));
-                }
-                if let Err(e) = mac_window::apply_spaces_behavior(&main_window) {
-                    debug_log::log(&format!("spaces behavior: {}", e));
+            // Both windows are borderless+transparent, so both need it.
+            for label in ["main", "editor"] {
+                if let Some(win) = app.get_webview_window(label) {
+                    if let Err(e) = mac_window::apply_rounded_corners(&win, 10.0) {
+                        debug_log::log(&format!("rounded corners [{}]: {}", label, e));
+                    }
+                    if let Err(e) = mac_window::apply_spaces_behavior(&win) {
+                        debug_log::log(&format!("spaces behavior [{}]: {}", label, e));
+                    }
                 }
             }
 

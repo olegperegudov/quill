@@ -3,6 +3,49 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.10 — editor window: review before it lands (Grammarly-style redesign, phase 1)
+
+The big UX shift. **Was:** the hotkey silently replaced the selection with the
+corrected text — no feedback, no chance to read what changed or tweak it before
+it landed. **Now:** the hotkey captures the selection and opens a dedicated Quill
+editor window over it; the window runs the correction itself, shows the result
+for you to read and hand-edit, and on **Apply** it re-activates the app you were
+in and types the final text back over the (still-present) selection. **Cancel /
+Esc** types nothing — the original is left untouched.
+
+Mechanics worth knowing for the next change:
+- New `editor` webview window (label `editor`, hidden until the hotkey fires;
+  preloaded at startup so its event listener is live). Shares the `default`
+  capability with `main` (added `editor` to the capability's window list) so it
+  can invoke commands and listen for events.
+- `mac_focus.rs` (new, macOS): grabs the frontmost app's pid via
+  `NSWorkspace.frontmostApplication` at capture time — *before* our window steals
+  focus — and re-activates it (`NSRunningApplication.activateWithOptions`) just
+  before typing. This is the load-bearing new risk: showing a window means the
+  target app loses focus, so the type-back now depends on returning it. Off-macOS
+  it's a no-op (hiding our window already restores focus there).
+- `lib.rs`: the hotkey no longer corrects+inserts; it captures → remembers the
+  front app → shows the editor → emits `editor:open` with the text. New commands:
+  `editor_correct` (async + `spawn_blocking` so the editor UI keeps animating
+  during the round-trip), `apply_correction` (logs history, hides editor,
+  re-activates the target, types), `close_editor` (cancel). The tray "working"
+  glyph was dropped — the editor window is now the feedback surface.
+- Front end: `editor.html/.css/.js` — a textarea over the captured text with a
+  status line and Apply/Recheck/Cancel. ⌘⏎ applies, Esc cancels. A `reqId`
+  stale-guard already gates the correction (load-bearing once live re-checking
+  lands in a later phase). Styling mirrors the settings window's tokens.
+
+Still to come (later phases): live per-word underlines on what changed,
+click-a-word to see было→стало and accept/reject, select-a-chunk to rewrite, and
+debounced re-checking as you type. This phase is the window + focus-return
+foundation only.
+
+Verification: compiles clean, the 16 unit tests stay green, and the editor
+window was eyeballed via a headless render (matches Quill's look). The
+focus-return + type-back across real apps (Telegram, browser, Mail) is the one
+path that needs this live release to confirm — it can't be exercised from a
+headless build.
+
 ## 0.1.9 — menu-bar "working" indicator
 
 The settings window lives in the tray, so when you trigger a correction from

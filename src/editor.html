@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="editor.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quill — правка</title>
+    <script type="module" src="/editor.js" defer></script>
+  </head>
+  <body>
+    <main class="editor">
+      <header class="titlebar" data-tauri-drag-region>
+        <div class="brand" data-tauri-drag-region>
+          <span class="mark" data-tauri-drag-region>✒</span>
+          <span class="wordmark" data-tauri-drag-region>Правка</span>
+        </div>
+        <button id="close" class="win-btn win-close" title="Закрыть без изменений">&#x2715;</button>
+      </header>
+
+      <div class="canvas">
+        <textarea id="text" spellcheck="false" placeholder="Текст появится здесь…"></textarea>
+      </div>
+
+      <footer class="bar">
+        <div id="status" class="status idle">
+          <span id="dot" class="dot"></span>
+          <span id="status-text">Готово</span>
+        </div>
+        <div class="actions">
+          <button id="cancel" class="btn ghost" title="Esc">Отмена</button>
+          <button id="recheck" class="btn ghost">Перепроверить</button>
+          <button id="apply" class="btn primary" title="⌘⏎">Применить</button>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>
