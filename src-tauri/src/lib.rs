@@ -463,11 +463,13 @@ fn save_config(config: &serde_json::Value) -> Result<(), String> {
     std::fs::write(&path, serde_json::to_string_pretty(config).unwrap()).map_err(|e| e.to_string())
 }
 
-/// Single source of truth for showing/hiding the settings window. Mirrors
-/// Ribbit: we avoid minimize/unminimize on macOS (it forces a Space switch);
-/// hide()/show() lands on the user's current Space.
-fn toggle_main_window<R: tauri::Runtime>(app: &AppHandle<R>, label: &tauri::menu::MenuItem<R>) {
-    let Some(w) = app.get_webview_window("main") else { return };
+/// Show/hide the chat from the tray — the chat *is* the app's face, so the tray
+/// toggles it (not the settings window). Mirrors Ribbit: we avoid
+/// minimize/unminimize on macOS (it forces a Space switch); hide()/show() lands
+/// on the user's current Space. No cursor repositioning here — that's only for
+/// the hotkey, which opens the chat where you're working.
+fn toggle_chat_window<R: tauri::Runtime>(app: &AppHandle<R>, label: &tauri::menu::MenuItem<R>) {
+    let Some(w) = app.get_webview_window("editor") else { return };
     let visible = w.is_visible().unwrap_or(false);
     let focused = w.is_focused().unwrap_or(false);
     if visible && focused {
@@ -569,7 +571,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| {
                     if event.id() == "show" {
-                        toggle_main_window(app, &show_for_menu);
+                        toggle_chat_window(app, &show_for_menu);
                     } else if event.id() == "quit" {
                         app.exit(0);
                     }
@@ -581,7 +583,7 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        toggle_main_window(tray.app_handle(), &show_for_tray);
+                        toggle_chat_window(tray.app_handle(), &show_for_tray);
                     }
                 });
 
@@ -612,6 +614,24 @@ pub fn run() {
                 .map_err(|e| format!("Failed to parse shortcut: {}", e))?;
             debug_log::log(&format!("registering hotkey: {}", shortcut_str));
             register_shortcut(&handle, shortcut)?;
+
+            // Tray app: launch into the tray, no window in your face — important
+            // because every update restarts the app. The one exception is
+            // first-run with no API key: pop settings so the hotkey isn't a dead
+            // end. Both windows are visible:false in tauri.conf.
+            let cfg = read_config();
+            let provider_name = cfg["llm_provider"]
+                .as_str()
+                .unwrap_or(corrector::DEFAULT_PROVIDER);
+            let active = corrector::find_provider(provider_name)
+                .unwrap_or_else(|| corrector::find_provider(corrector::DEFAULT_PROVIDER).unwrap());
+            if !secrets::has_key(active.env_var) {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                    let _ = handle.emit("show-settings", ());
+                }
+            }
 
             // Auto-check for updates a few seconds after launch, then every
             // 30 min until one is found — Quill lives in the tray all day.

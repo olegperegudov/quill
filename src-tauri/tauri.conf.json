@@ -11,11 +11,12 @@
     "windows": [
       {
         "label": "main",
-        "title": "Quill",
+        "title": "Quill — настройки",
         "width": 460,
         "height": 580,
         "resizable": true,
         "center": true,
+        "visible": false,
         "alwaysOnTop": false,
         "decorations": false,
         "transparent": true

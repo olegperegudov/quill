@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quill</title>
+    <title>Quill — настройки</title>
     <script type="module" src="/main.js" defer></script>
   </head>
   <body>
@@ -13,42 +13,18 @@
         <div class="brand" data-tauri-drag-region>
           <span class="mark" data-tauri-drag-region>✒</span>
           <div class="brand-text" data-tauri-drag-region>
-            <span class="wordmark" data-tauri-drag-region>Quill</span>
-            <!-- Empty at rest (like Ribbit); shows the live state only while a
-                 correction is running, then clears. Hidden when empty. -->
+            <span class="wordmark" data-tauri-drag-region>Настройки</span>
             <span id="status-detail" class="status-detail idle" data-tauri-drag-region></span>
           </div>
         </div>
         <div class="win-controls">
-          <button id="search-btn" class="win-btn" title="Search corrections">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.6"/><line x1="10.3" y1="10.3" x2="14.2" y2="14.2"/></svg>
-          </button>
-          <button id="settings-btn" class="win-btn" title="Settings">&#x2699;</button>
-          <button id="win-min" class="win-btn" title="Minimize">&#x2212;</button>
-          <button id="win-close" class="win-btn win-close" title="Close to tray">&#x2715;</button>
+          <button id="win-min" class="win-btn" title="Свернуть">&#x2212;</button>
+          <button id="win-close" class="win-btn win-close" title="Скрыть в трей">&#x2715;</button>
         </div>
       </header>
 
-      <!-- Quick search popup (magnifier in header); filters the log live. -->
-      <div id="search-popup" style="display:none">
-        <input id="search-input" type="text" placeholder="Search corrections…" autocomplete="off" />
-      </div>
-
-      <!-- The log. Each row is a finished correction (newest on top); the text
-           shown is the polished result, the clock peeks back at the original. -->
-      <div id="log-view">
-        <div id="history-list" class="history-list"></div>
-        <div id="history-empty" class="history-empty">
-          <p class="he-title">Nothing yet.</p>
-          <p class="he-sub">
-            Select text in any app and press
-            <kbd id="empty-shortcut">⌃⌥E</kbd> — your corrections land here.
-          </p>
-        </div>
-      </div>
-
-      <!-- Settings live behind the gear so the log greets you clean. -->
-      <section id="settings-panel" class="settings-panel" style="display:none">
+      <!-- The chat window is the app's face; this window is just its settings. -->
+      <section id="settings-panel" class="settings-panel">
         <div class="setting-row">
           <span class="setting-label">Hotkey</span>
           <kbd id="shortcut-display" title="Click to change">⌃⌥E</kbd>
@@ -70,11 +46,11 @@
           <span class="setting-label">Debug log</span>
           <button id="debug-btn" class="ghost" title="Debug log">&gt;_</button>
         </div>
-        <!-- Update lives here, like Ribbit: when one is available the gear glows
-             so you notice it from the log; open settings and the button is lit. -->
+        <!-- Update: the button shows the download percent and auto-installs; the
+             chat's gear glows green when one is waiting (Ribbit-style). -->
         <div class="setting-row">
           <a class="setting-label version-link" id="version" href="#" title="changelog">v0.0.0</a>
-          <button id="update-btn" class="ghost" title="Checks for a new version. When one is available the gear glows — click to download and install.">check update</button>
+          <button id="update-btn" class="ghost" title="Checks for a new version; downloads and installs it.">check update</button>
         </div>
         <p class="settings-note">Corrections are kept on this computer only.</p>
       </section>

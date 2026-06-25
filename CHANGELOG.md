@@ -3,6 +3,30 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.17 — the chat is the only face; the old clock-log window is gone
+
+**The regression it fixes.** Every update restarts the app, and on launch the
+*settings* window (which still carried the old clock-rewind history list) popped
+up on its own. So after updating, the user saw the thing we'd replaced — a log
+with clock tongues, no composer, no chat — and reasonably thought the chat was
+gone. The chat was fine; it was just a second window that only opened on the
+hotkey, while the wrong window greeted them on launch.
+
+**The fix — collapse to one face.**
+- The **chat is the app**. The tray icon (click + "Show" menu) now toggles the
+  chat window, not settings. The hotkey already opened the chat.
+- **Nothing pops on launch.** Both windows are `visible: false`; Quill lives in
+  the tray. The sole exception is genuine first-run with no API key, which opens
+  settings so the hotkey isn't a dead end.
+- The **settings window is settings only**. Removed the clock-rewind history
+  list and the search box from it (and their dead CSS) — there are no clock
+  tongues anywhere now. It opens only from the chat's gear (`show_main_window`).
+- Tray retarget: `toggle_main_window` → `toggle_chat_window` (targets the editor
+  window); launch-time onboarding check added in `setup`.
+
+History still lives in the chat (loaded on open, day-separated). Settings keeps
+model / key / hotkey / update / debug.
+
 ## 0.1.16 — blank when empty; day separators in the chat (Ribbit parity)
 
 - **Empty chat is empty.** Dropped the "select text and press ⌃⌥E" greeting.
