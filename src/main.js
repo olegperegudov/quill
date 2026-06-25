@@ -315,26 +315,22 @@ async function setupUpdates() {
   }
 
   // Download + install takes 20-30s and ends with the app restarting itself.
-  // The percentage rides on the button so the click never feels dead.
+  // The percentage rides on the button only (Ribbit-style) — one place, not two.
   async function install(version) {
     btn.textContent = "downloading…";
     btn.disabled = true;
-    setStatus("Downloading update…", "working");
     try {
       await invoke("install_update"); // on success the app restarts — no return
     } catch (err) {
-      setStatus(`Update failed: ${err}`, "error");
-      arm(version); // let them retry
+      btn.textContent = "update failed";
+      setTimeout(() => arm(version), 2500); // let them retry
     }
   }
 
   setIdle();
   // Rust finds a release in the background → light the gear + arm install.
   await listen("update-available", (e) => arm(e.payload));
-  await listen("update-progress", (e) => {
-    btn.textContent = `downloading ${e.payload}%`;
-    setStatus(`Downloading update… ${e.payload}%`, "working");
-  });
+  await listen("update-progress", (e) => { btn.textContent = `downloading ${e.payload}%`; });
 }
 
 // --- Wiring ---
