@@ -3,8 +3,8 @@
 //! The window is secondary — the product is the global hotkey, which the Rust
 //! side owns. The body is a chat-style log of what Quill corrected (newest on
 //! top); each row shows the polished result and a clock you press-and-hold to
-//! peek at the original. Settings (model, key, hotkey) hide behind the gear so
-//! the log greets you clean.
+//! peek at the original. A magnifier filters the log live (matching the original
+//! text too); settings and updates hide behind the gear, Ribbit-style.
 
 import { shortcutFromEvent, prettyShortcut } from "./shortcut.js";
 
@@ -31,18 +31,84 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-// --- Live status (header subtitle) ---
+// --- Live status (header subtitle, empty at rest) ---
 
 let statusResetTimer = null;
 function setStatus(text, kind = "idle") {
   const el = $("#status-detail");
   el.className = `status-detail ${kind}`;
-  el.textContent = text;
+  el.textContent = text || "";
   clearTimeout(statusResetTimer);
-  // Settle back to "Ready" after a terminal state so the line doesn't lie.
-  if (kind === "done" || kind === "error") {
-    statusResetTimer = setTimeout(() => setStatus("Ready", "idle"), 4000);
+  // Anything that isn't an in-flight "working" state is transient — clear it so
+  // the header settles back to just "Quill" (the empty subtitle hides itself).
+  if (text && kind !== "working") {
+    statusResetTimer = setTimeout(() => {
+      el.textContent = "";
+      el.className = "status-detail idle";
+    }, 4000);
   }
+}
+
+// --- Search ---
+
+let searchQuery = "";
+
+const matchesQuery = (text, q) => !q || (text || "").toLowerCase().includes(q.toLowerCase());
+
+// Render `text` into `el`, wrapping every occurrence of `q` in <mark>.
+function highlightInto(el, text, q) {
+  el.textContent = "";
+  const query = (q || "").trim();
+  if (!query) { el.textContent = text; return; }
+  const lc = text.toLowerCase(), lq = query.toLowerCase();
+  let i = 0, idx;
+  while ((idx = lc.indexOf(lq, i)) !== -1) {
+    if (idx > i) el.appendChild(document.createTextNode(text.slice(i, idx)));
+    const m = document.createElement("mark");
+    m.textContent = text.slice(idx, idx + query.length);
+    el.appendChild(m);
+    i = idx + query.length;
+  }
+  if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
+}
+
+// Paint a row's text for its current state: the original while the clock is
+// held, otherwise the corrected text — highlighting the live search query.
+function renderRowText(row) {
+  const showOrig = row._peeking && row._changed;
+  const textEl = row.querySelector(".log-text");
+  highlightInto(textEl, showOrig ? row._orig : row._corr, searchQuery);
+  textEl.classList.toggle("is-original", showOrig);
+}
+
+// Live filter. A row stays if the query hits the corrected OR the original
+// text. When it only hits the (hidden) original, the clock lights up so you
+// know to hold it — and holding reveals the highlighted match.
+function applySearch() {
+  const q = searchQuery.trim();
+  for (const row of $("#history-list").children) {
+    const hitCorr = matchesQuery(row._corr, q);
+    const hitOrig = row._changed && matchesQuery(row._orig, q);
+    row.style.display = (!q || hitCorr || hitOrig) ? "" : "none";
+    if (row._clock) row._clock.classList.toggle("search-hit", !!q && hitOrig);
+    renderRowText(row);
+  }
+}
+
+function openSearch() {
+  if (currentView !== "log") showView("log");
+  $("#search-popup").style.display = "block";
+  $("#search-input").focus();
+}
+
+function closeSearch() {
+  const p = $("#search-popup");
+  if (!p) return;
+  p.style.display = "none";
+  const inp = $("#search-input");
+  if (inp) inp.value = "";
+  searchQuery = "";
+  applySearch();
 }
 
 // --- View switching (log <-> settings) ---
@@ -53,21 +119,24 @@ function showView(name) {
   $("#log-view").style.display = name === "log" ? "flex" : "none";
   $("#settings-panel").style.display = name === "settings" ? "flex" : "none";
   $("#settings-btn").classList.toggle("active", name === "settings");
+  if (name !== "log") closeSearch();
 }
 
 // --- Log ---
 
 function renderHistory(entries) {
   const list = $("#history-list");
+  const empty = $("#history-empty");
   list.innerHTML = "";
   if (!entries || entries.length === 0) {
-    $("#history-empty").style.display = "flex";
+    list.style.display = "none";
+    empty.style.display = "flex";
     return;
   }
-  $("#history-empty").style.display = "none";
-  for (const e of entries) {
-    list.appendChild(logRow(e));
-  }
+  list.style.display = "";
+  empty.style.display = "none";
+  for (const e of entries) list.appendChild(logRow(e));
+  applySearch();
 }
 
 // One correction as a chat-style row: time, the polished text, and — when the
@@ -75,6 +144,10 @@ function renderHistory(entries) {
 function logRow(e) {
   const row = document.createElement("div");
   row.className = "log-entry";
+  row._orig = e.original || "";
+  row._corr = e.corrected || "";
+  row._changed = e.original !== e.corrected;
+  row._peeking = false;
 
   const time = document.createElement("span");
   time.className = "log-time";
@@ -82,34 +155,26 @@ function logRow(e) {
 
   const text = document.createElement("span");
   text.className = "log-text";
-  text.textContent = e.corrected || "";
 
   row.append(time, text);
 
-  const changed = e.original !== e.corrected;
-  if (changed) {
+  if (row._changed) {
     const clock = document.createElement("button");
     clock.className = "log-clock";
     clock.title = "hold to see the original";
     clock.tabIndex = -1;
     clock.innerHTML = CLOCK_SVG;
-
-    const showOriginal = (ev) => {
+    clock.addEventListener("pointerdown", (ev) => {
       ev.preventDefault();
       // Capture the pointer so release restores even if the cursor drifts off.
       try { clock.setPointerCapture(ev.pointerId); } catch (_) {}
-      text.textContent = e.original;
-      text.classList.add("is-original");
-      row.classList.add("peeking");
-    };
-    const restore = () => {
-      text.textContent = e.corrected;
-      text.classList.remove("is-original");
-      row.classList.remove("peeking");
-    };
-    clock.addEventListener("pointerdown", showOriginal);
-    clock.addEventListener("pointerup", restore);
-    clock.addEventListener("pointercancel", restore);
+      row._peeking = true;
+      renderRowText(row);
+    });
+    const release = () => { row._peeking = false; renderRowText(row); };
+    clock.addEventListener("pointerup", release);
+    clock.addEventListener("pointercancel", release);
+    row._clock = clock;
     row.appendChild(clock);
   } else {
     const clean = document.createElement("span");
@@ -117,6 +182,7 @@ function logRow(e) {
     clean.textContent = "already clean";
     row.appendChild(clean);
   }
+  renderRowText(row);
   return row;
 }
 
@@ -133,7 +199,9 @@ async function loadHistory() {
 function prependCorrection(e) {
   $("#history-empty").style.display = "none";
   const list = $("#history-list");
+  list.style.display = "";
   list.insertBefore(logRow({ ...e, ts: new Date().toISOString() }), list.firstChild);
+  applySearch();
 }
 
 // --- Provider + key ---
@@ -207,33 +275,48 @@ function setupShortcutCapture() {
   });
 }
 
-// --- Update flow ---
+// --- Update flow (Ribbit-style: button lives in settings, the gear glows when
+//     an update is waiting so you notice it from the log) ---
 
 async function setupUpdates() {
   $("#version").textContent = "v" + (await invoke("get_current_version"));
-
   const btn = $("#update-btn");
-  let pendingVersion = null; // set once an update is known to be available
+  const gear = $("#settings-btn");
 
-  function markAvailable(version) {
-    pendingVersion = version;
-    btn.textContent = `install v${version}`;
-    btn.classList.add("ready");
+  function setIdle() {
+    btn.textContent = "check update";
+    btn.classList.remove("update-available");
+    gear.classList.remove("update-available");
     btn.disabled = false;
+    btn.onclick = check;
   }
 
-  function resetIdle() {
-    pendingVersion = null;
-    btn.textContent = "check update";
-    btn.classList.remove("ready");
+  // Arm the button (and light the gear) to install `version` on the next click.
+  function arm(version) {
+    btn.textContent = `update to v${version}`;
+    btn.classList.add("update-available");
+    gear.classList.add("update-available");
     btn.disabled = false;
+    btn.onclick = () => install(version);
+  }
+
+  async function check() {
+    btn.textContent = "checking…";
+    btn.disabled = true;
+    try {
+      const res = await invoke("check_for_update");
+      if (res.available) arm(res.version);
+      else { btn.textContent = "up to date"; setTimeout(setIdle, 2500); }
+    } catch (err) {
+      btn.textContent = "check failed";
+      setStatus(`Update check failed: ${err}`, "error");
+      setTimeout(setIdle, 2500);
+    }
   }
 
   // Download + install takes 20-30s and ends with the app restarting itself.
-  // Without live feedback the click feels dead — so we drive both the button
-  // and the (more visible) status line from the update-progress events.
-  async function startInstall() {
-    btn.classList.remove("ready");
+  // The percentage rides on the button so the click never feels dead.
+  async function install(version) {
     btn.textContent = "downloading…";
     btn.disabled = true;
     setStatus("Downloading update…", "working");
@@ -241,33 +324,16 @@ async function setupUpdates() {
       await invoke("install_update"); // on success the app restarts — no return
     } catch (err) {
       setStatus(`Update failed: ${err}`, "error");
-      markAvailable(pendingVersion); // let them retry
+      arm(version); // let them retry
     }
   }
 
-  // One handler: click checks for an update, or installs the one we already found.
-  btn.addEventListener("click", async () => {
-    if (pendingVersion) return startInstall();
-    btn.textContent = "checking…";
-    btn.disabled = true;
-    try {
-      const res = await invoke("check_for_update");
-      if (res.available) markAvailable(res.version);
-      else { btn.textContent = "up to date"; setTimeout(resetIdle, 2500); }
-    } catch (err) {
-      btn.textContent = "check failed";
-      setStatus(`Update check failed: ${err}`, "error");
-      setTimeout(resetIdle, 2500);
-    }
-  });
-
-  // Rust lights the button on its own when a release appears in the background.
-  await listen("update-available", (e) => markAvailable(e.payload));
-  // Live download progress.
+  setIdle();
+  // Rust finds a release in the background → light the gear + arm install.
+  await listen("update-available", (e) => arm(e.payload));
   await listen("update-progress", (e) => {
-    const pct = e.payload;
-    btn.textContent = `downloading ${pct}%`;
-    setStatus(`Downloading update… ${pct}%`, "working");
+    btn.textContent = `downloading ${e.payload}%`;
+    setStatus(`Downloading update… ${e.payload}%`, "working");
   });
 }
 
@@ -279,6 +345,16 @@ async function main() {
   $("#win-close").addEventListener("click", () => invoke("hide_to_tray"));
   $("#settings-btn").addEventListener("click", () =>
     showView(currentView === "settings" ? "log" : "settings"));
+
+  // Search
+  $("#search-btn").addEventListener("click", () => {
+    if ($("#search-popup").style.display === "none") openSearch();
+    else closeSearch();
+  });
+  $("#search-input").addEventListener("input", (e) => { searchQuery = e.target.value; applySearch(); });
+  $("#search-input").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); closeSearch(); }
+  });
 
   // Provider switch
   $("#provider-select").addEventListener("change", async (e) => {

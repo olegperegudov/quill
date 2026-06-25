@@ -2,8 +2,8 @@
    Visual language (greenfield, set here): dark slate base shared with the
    Ribbit family, but a softer system-sans for a "writing" feel and an
    ink-violet accent that's distinctly Quill, not Ribbit's green.
-   The body is Ribbit's chat-style log: flat rows, newest on top. Settings
-   live behind the gear so the log greets you clean. */
+   The body is Ribbit's chat-style log: flat rows, newest on top. Search,
+   settings and updates live behind the header icons so the log stays clean. */
 
 :root {
   --bg: #0f1318;
@@ -14,7 +14,7 @@
   --muted: #7a8493;
   --ink: #a78bfa;        /* Quill accent — violet ink */
   --ink-dim: #6d5bd0;
-  --good: #4ade80;
+  --good: #4ade80;       /* update-available glow (Ribbit green) */
   --bad: #f87171;
   --radius: 10px;
 }
@@ -32,6 +32,7 @@ body {
 }
 
 .container {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -63,7 +64,8 @@ body {
   font-size: 1rem;
   letter-spacing: 0.02em;
 }
-/* Status as a quiet subtitle under the wordmark — present but never shouting. */
+/* Status as a quiet subtitle — present only while something is happening;
+   empty (and so hidden) at rest, leaving just "Quill". */
 .status-detail {
   font-size: 0.7rem;
   color: var(--muted);
@@ -71,6 +73,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.status-detail:empty { display: none; }
 .status-detail.working { color: var(--ink); }
 .status-detail.done { color: var(--good); }
 .status-detail.error { color: #fca5a5; }
@@ -89,7 +92,33 @@ body {
 }
 .win-btn:hover { background: var(--panel-2); color: var(--text); }
 .win-btn.active { color: var(--ink); }
+.win-btn svg { display: block; }
 .win-close:hover { background: #5b2330; color: #ffb4b4; }
+
+/* The gear glows green when an update is waiting — visible from the log. */
+.win-btn.update-available { color: var(--good); animation: update-pulse 2s ease-in-out infinite; }
+
+/* Search popup -------------------------------------------------------- */
+#search-popup {
+  position: absolute;
+  top: 2.7rem;
+  right: 0.9rem;
+  z-index: 20;
+}
+#search-input {
+  width: 15rem;
+  max-width: 60vw;
+  background: var(--panel);
+  border: 1px solid var(--ink-dim);
+  border-radius: 7px;
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+#search-input::placeholder { color: #4d5663; }
 
 /* Log ----------------------------------------------------------------- */
 #log-view {
@@ -133,6 +162,12 @@ body {
 /* While the clock is held, the row shows the pre-Quill text — dimmed + italic
    so it reads as "this was before". */
 .log-text.is-original { color: var(--muted); font-style: italic; }
+.log-text mark {
+  background: rgba(167,139,250,0.32);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 1px;
+}
 .log-clean {
   font-size: 0.66rem;
   color: var(--muted);
@@ -141,7 +176,8 @@ body {
   align-self: center;
 }
 
-/* The clock affordance: subtle at rest, ink when you press to rewind. */
+/* The clock affordance: subtle at rest, ink when you press to rewind, and lit
+   when a live search hit is hiding in the original underneath. */
 .log-clock {
   flex-shrink: 0;
   align-self: center;
@@ -156,7 +192,8 @@ body {
   touch-action: none;
 }
 .log-clock:hover { color: var(--muted); background: var(--panel-2); }
-.log-entry.peeking .log-clock { color: var(--ink); background: rgba(167,139,250,0.12); }
+.log-entry.peeking .log-clock,
+.log-clock.search-hit { color: var(--ink); background: rgba(167,139,250,0.14); }
 .log-clock svg { display: block; }
 
 .history-empty {
@@ -174,6 +211,10 @@ body {
 .he-sub { font-size: 0.78rem; line-height: 1.6; max-width: 22rem; }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+@keyframes update-pulse {
+  0%, 100% { color: var(--good); }
+  50% { color: #22c55e; }
+}
 
 /* Settings ------------------------------------------------------------ */
 .settings-panel {
@@ -196,6 +237,8 @@ body {
   color: var(--muted);
   flex-shrink: 0;
 }
+.version-link { color: var(--muted); text-decoration: none; cursor: pointer; transition: color 0.15s; }
+.version-link:hover { color: var(--ink); }
 select, input[type="password"], input[type="text"] {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -244,25 +287,8 @@ kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(16
 
 .link { color: var(--ink); cursor: pointer; text-decoration: none; }
 .link:hover { text-decoration: underline; }
-.muted { color: var(--muted); background: none; border: none; font-size: 0.72rem; text-decoration: none; }
 
-/* Scrollbar */
-.history-list::-webkit-scrollbar,
-.settings-panel::-webkit-scrollbar { width: 6px; }
-.history-list::-webkit-scrollbar-thumb,
-.settings-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-.history-list::-webkit-scrollbar-thumb:hover,
-.settings-panel::-webkit-scrollbar-thumb:hover { background: #2f3947; }
-
-/* Footer -------------------------------------------------------------- */
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  padding-top: 0.1rem;
-}
-.footer-right { display: flex; gap: 0.4rem; }
+/* Buttons (debug, update) — quiet ghosts; update glows green when armed. */
 .ghost {
   background: transparent;
   border: 1px solid var(--line);
@@ -276,7 +302,19 @@ kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(16
 }
 .ghost:hover { border-color: var(--ink-dim); color: var(--text); }
 .ghost:disabled { opacity: 0.5; cursor: default; }
-.ghost.ready { border-color: var(--good); color: var(--good); }
+.ghost.update-available {
+  color: var(--good);
+  border-color: rgba(74, 222, 128, 0.5);
+  animation: update-pulse 2s ease-in-out infinite;
+}
+
+/* Scrollbar */
+.history-list::-webkit-scrollbar,
+.settings-panel::-webkit-scrollbar { width: 6px; }
+.history-list::-webkit-scrollbar-thumb,
+.settings-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.history-list::-webkit-scrollbar-thumb:hover,
+.settings-panel::-webkit-scrollbar-thumb:hover { background: #2f3947; }
 
 /* Debug overlay ------------------------------------------------------- */
 .panel {

@@ -14,16 +14,25 @@
           <span class="mark" data-tauri-drag-region>✒</span>
           <div class="brand-text" data-tauri-drag-region>
             <span class="wordmark" data-tauri-drag-region>Quill</span>
-            <!-- Live state of the most recent correction; settles back to "Ready". -->
-            <span id="status-detail" class="status-detail idle" data-tauri-drag-region>Ready</span>
+            <!-- Empty at rest (like Ribbit); shows the live state only while a
+                 correction is running, then clears. Hidden when empty. -->
+            <span id="status-detail" class="status-detail idle" data-tauri-drag-region></span>
           </div>
         </div>
         <div class="win-controls">
+          <button id="search-btn" class="win-btn" title="Search corrections">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.6"/><line x1="10.3" y1="10.3" x2="14.2" y2="14.2"/></svg>
+          </button>
           <button id="settings-btn" class="win-btn" title="Settings">&#x2699;</button>
           <button id="win-min" class="win-btn" title="Minimize">&#x2212;</button>
           <button id="win-close" class="win-btn win-close" title="Close to tray">&#x2715;</button>
         </div>
       </header>
+
+      <!-- Quick search popup (magnifier in header); filters the log live. -->
+      <div id="search-popup" style="display:none">
+        <input id="search-input" type="text" placeholder="Search corrections…" autocomplete="off" />
+      </div>
 
       <!-- The log. Each row is a finished correction (newest on top); the text
            shown is the polished result, the clock peeks back at the original. -->
@@ -61,15 +70,14 @@
           <span class="setting-label">Debug log</span>
           <button id="debug-btn" class="ghost" title="Debug log">&gt;_</button>
         </div>
+        <!-- Update lives here, like Ribbit: when one is available the gear glows
+             so you notice it from the log; open settings and the button is lit. -->
+        <div class="setting-row">
+          <a class="setting-label version-link" id="version" href="#" title="changelog">v0.0.0</a>
+          <button id="update-btn" class="ghost" title="Checks for a new version. When one is available the gear glows — click to download and install.">check update</button>
+        </div>
         <p class="settings-note">Corrections are kept on this computer only.</p>
       </section>
-
-      <footer class="footer">
-        <a id="version" class="muted link" href="#" title="changelog">v0.0.0</a>
-        <div class="footer-right">
-          <button id="update-btn" class="ghost" title="Check for updates">check update</button>
-        </div>
-      </footer>
 
       <!-- Debug log overlay -->
       <div id="debug-panel" class="panel" style="display:none">

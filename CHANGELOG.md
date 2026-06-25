@@ -3,6 +3,33 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.12 — search, Ribbit-style updates, and minimalist polish
+
+Front-end only again; same data, same Rust. Brings the main window the rest of
+the way to Ribbit's minimalism.
+
+- **Search (magnifier in the header).** A live filter popup, like Ribbit — but
+  it matches the *original* text too, not just the corrected result. A row stays
+  if the query hits either side; matches are highlighted (`<mark>`). When the hit
+  is only in the original (hidden under the clock), the **clock lights up** so you
+  know to hold it — and holding reveals the original with the match highlighted.
+  Substring match, case-insensitive. `entryMatchesQuery`/`highlightInto`/
+  `applySearch`/`renderRowText` in main.js; `#search-btn` + `#search-popup`.
+- **Updates work exactly like Ribbit now.** The standalone footer button is gone
+  (the whole footer is); the update control lives in settings, and when a release
+  is found the **gear glows green** so you spot it from the log without opening
+  settings. Inside, the button shows `update to vX`, then `downloading N%` on the
+  button itself, then the app restarts. `setupUpdates` rewritten as a clean
+  swap-the-onclick state machine (check ⇄ install) to avoid Ribbit's
+  double-handler quirk; `.update-available` glow on both `#update-btn` and
+  `#settings-btn`.
+- **Minimalist header.** Dropped the persistent "Ready" — the status subtitle is
+  empty (and hidden) at rest, surfacing only while a correction or download is in
+  flight, then clearing. Just "Quill" the rest of the time.
+- **Empty state actually centers.** It used to share the column with the
+  (empty) list and drift below middle; the list is hidden when there are no
+  entries, so the welcome sits dead-centre.
+
 ## 0.1.11 — main window: a chat-style log + settings behind a gear
 
 Front-end only; the correction flow and the whole Rust side are untouched. The
