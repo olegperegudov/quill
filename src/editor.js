@@ -58,8 +58,14 @@ async function cancel() {
   try { await invoke("close_editor"); } catch (_) {}
 }
 
+// Swap between the editor and the "grant Accessibility" screen.
+function showPermission(on) {
+  $("#perm-overlay").style.display = on ? "flex" : "none";
+}
+
 // Rust hands us the captured text and shows the window.
 listen("editor:open", (e) => {
+  showPermission(false);
   original = e.payload || "";
   textarea.value = original;
   textarea.focus();
@@ -68,10 +74,30 @@ listen("editor:open", (e) => {
   check();
 });
 
+// Rust couldn't act because Accessibility isn't granted — it already popped the
+// macOS dialog; we show the why + a way to finish and re-check.
+listen("editor:permission", () => {
+  $("#perm-hint").textContent = "";
+  showPermission(true);
+});
+
 $("#apply").addEventListener("click", apply);
 $("#recheck").addEventListener("click", check);
 $("#cancel").addEventListener("click", cancel);
 $("#close").addEventListener("click", cancel);
+
+$("#perm-open").addEventListener("click", () => invoke("open_accessibility_settings"));
+$("#perm-retry").addEventListener("click", async () => {
+  if (await invoke("accessibility_status")) {
+    showPermission(false);
+    // We never captured a selection on this run — close and let the user press
+    // the hotkey again now that Quill can actually read it.
+    cancel();
+  } else {
+    $("#perm-hint").textContent =
+      "Пока не включено. Включи тумблер Quill в списке (может потребоваться перезапуск).";
+  }
+});
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.preventDefault(); cancel(); return; }

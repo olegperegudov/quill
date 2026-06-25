@@ -138,3 +138,38 @@ textarea#text::placeholder { color: #4d5663; }
 }
 .btn.primary:hover { background: #b89dfb; border-color: #b89dfb; }
 .btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Accessibility-needed screen ----------------------------------------- */
+.perm-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+  z-index: 20;
+}
+.perm-card {
+  max-width: 24rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.7rem;
+}
+.perm-mark {
+  font-size: 1.8rem;
+  color: var(--ink);
+  transform: rotate(-8deg);
+}
+.perm-title { font-size: 1rem; font-weight: 600; color: var(--text); }
+.perm-body { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+.perm-body b { color: var(--text); font-weight: 600; }
+.perm-hint {
+  font-size: 0.78rem;
+  color: #fca5a5;
+  min-height: 1rem;
+}
+.perm-actions { display: flex; gap: 0.5rem; margin-top: 0.3rem; }

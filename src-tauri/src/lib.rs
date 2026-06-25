@@ -15,6 +15,7 @@
 //! Forked from Ribbit (voice-to-text); the tray/updater/window/TCC plumbing is
 //! shared, the audio pipeline is replaced by the selection→correct→insert flow.
 
+mod accessibility;
 mod corrector;
 mod debug_log;
 mod inserter;
@@ -275,6 +276,10 @@ fn set_shortcut(
 /// The actual LLM round-trip is kicked off from the editor (editor_correct), so
 /// this only does the fast capture. Runs on its own thread so the hotkey handler
 /// never blocks; re-entrancy is guarded by `AppState::busy`.
+///
+/// The window opens no matter what — a hotkey that does nothing reads as
+/// "broken". If Accessibility isn't granted (so ⌘C/typing can't work), we pop
+/// the real macOS prompt and open the editor on its "grant access" screen.
 fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
     {
         let mut s = state.lock().unwrap();
@@ -287,34 +292,59 @@ fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
     let app = app.clone();
     let state = Arc::clone(state);
     std::thread::spawn(move || {
+        let show_editor = || match app.get_webview_window("editor") {
+            Some(w) => {
+                let _ = w.show();
+                let _ = w.set_focus();
+                true
+            }
+            None => {
+                debug_log::log("editor window missing — cannot open");
+                false
+            }
+        };
+
         // Remember the target app while it's still frontmost — our editor window
         // hasn't been shown yet, so whatever is frontmost now is where the text
         // came from and where it must go back.
         let target_pid = mac_focus::remember_frontmost();
+
+        // No Accessibility → no synthetic ⌘C and no type-back. Rather than fail
+        // silently (the old behaviour that made the hotkey look dead), ask macOS
+        // for the grant via its own dialog and open the editor explaining it.
+        if !accessibility::is_trusted() {
+            debug_log::log("hotkey fired → accessibility not granted; prompting");
+            accessibility::prompt();
+            if show_editor() {
+                let _ = app.emit("editor:permission", ());
+            }
+            state.lock().unwrap().busy = false;
+            return;
+        }
 
         // Let the hotkey's modifier keys fully release before we synthesize ⌘C —
         // otherwise the OS may still see ctrl/alt held and copy a different chord.
         std::thread::sleep(std::time::Duration::from_millis(60));
         debug_log::log("hotkey fired → capturing selection");
 
-        match selection::capture() {
-            Ok(text) if !text.is_empty() => {
-                debug_log::log(&format!(
-                    "captured {} chars, target pid {:?}",
-                    text.chars().count(),
-                    target_pid
-                ));
-                state.lock().unwrap().target_pid = target_pid;
-                if let Some(w) = app.get_webview_window("editor") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                    let _ = app.emit("editor:open", &text);
-                } else {
-                    debug_log::log("editor window missing — cannot open");
-                }
+        let text = match selection::capture() {
+            Ok(t) => t,
+            Err(e) => {
+                debug_log::log(&format!("capture error: {}", e));
+                String::new()
             }
-            Ok(_) => debug_log::log("nothing selected — editor not opened"),
-            Err(e) => debug_log::log(&format!("capture error: {}", e)),
+        };
+        debug_log::log(&format!(
+            "captured {} chars, target pid {:?}",
+            text.chars().count(),
+            target_pid
+        ));
+
+        // Open even on an empty capture: the user gets a window to type or paste
+        // into instead of a dead key press.
+        state.lock().unwrap().target_pid = target_pid;
+        if show_editor() {
+            let _ = app.emit("editor:open", &text);
         }
 
         state.lock().unwrap().busy = false;
@@ -393,6 +423,24 @@ fn apply_correction(
 fn close_editor(app: AppHandle) {
     if let Some(w) = app.get_webview_window("editor") {
         let _ = w.hide();
+    }
+}
+
+/// Is the app trusted for Accessibility right now? Backs the editor's "I've
+/// enabled it" retry button so it can confirm without guessing.
+#[tauri::command]
+fn accessibility_status() -> bool {
+    accessibility::is_trusted()
+}
+
+/// Jump straight to the Accessibility pane in System Settings.
+#[tauri::command]
+fn open_accessibility_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn();
     }
 }
 
@@ -518,7 +566,9 @@ pub fn run() {
             get_current_version,
             editor_correct,
             apply_correction,
-            close_editor
+            close_editor,
+            accessibility_status,
+            open_accessibility_settings
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

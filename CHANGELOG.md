@@ -3,6 +3,39 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.13 — the hotkey never dies silently; ask for Accessibility out loud
+
+The recurring "Quill doesn't work after an update" finally fixed at the root.
+
+**The bug.** Each release rotates the ad-hoc cdhash, so `tcc_reset` wipes the
+Accessibility grant — and then the hotkey would capture the selection with a
+synthetic ⌘C that macOS silently filters (no permission), get nothing, and
+*open no window at all*. From the user's seat: press the hotkey, nothing
+happens, no hint why. The old code assumed macOS would re-prompt on the next
+synthetic keystroke; it doesn't — posting an event without the grant just fails
+quietly, it never triggers a prompt.
+
+**The fix.**
+- New `accessibility.rs`: `is_trusted()` (`AXIsProcessTrusted`) and `prompt()`
+  (`AXIsProcessTrustedWithOptions` with the prompt option) — the latter pops the
+  real macOS "allow Quill to control this computer" dialog. Needs the
+  `core-foundation` crate + the ApplicationServices framework.
+- `launch_editor` rewritten so **the window always opens**. If we're not trusted
+  it pops the macOS dialog and shows the editor on a "grant access" screen
+  instead of attempting a doomed silent ⌘C. If we are trusted it captures and
+  opens as before — and now even an *empty* capture opens the window (type/paste)
+  rather than dying.
+- Editor gains a permission screen (`editor:permission` event): explains it needs
+  Accessibility, with **Open System Settings** (`open_accessibility_settings`)
+  and **I've enabled it → retry** (`accessibility_status`) buttons.
+
+After an update the flow is now Ribbit-like: press the hotkey → macOS asks for
+the grant → enable Quill → it works. No more silent dead key press.
+
+Still ad-hoc signed, so the grant doesn't *survive* updates yet — a stable
+signing identity (so the cdhash stops rotating) is the next step. But the app no
+longer hides the problem.
+
 ## 0.1.12 — search, Ribbit-style updates, and minimalist polish
 
 Front-end only again; same data, same Rust. Brings the main window the rest of
