@@ -20,14 +20,10 @@
         </div>
       </header>
 
-      <!-- The conversation: your text as a bubble, the correction below it.
-           Click any bubble to copy it. Empty hint lives here until messages land. -->
-      <div id="log" class="log">
-        <div id="empty" class="empty">
-          <p class="empty-title">Выдели текст и нажми <kbd id="empty-shortcut">⌃⌥E</kbd></p>
-          <p class="empty-sub">Исправленный вариант появится здесь. Нажми на любое облачко — скопируется в буфер.</p>
-        </div>
-      </div>
+      <!-- The conversation: your text as a bubble, the correction below it,
+           day separators between calendar days. Click any bubble to copy it.
+           Empty when there's no history — nothing to greet you with. -->
+      <div id="log" class="log"></div>
 
       <form id="composer" class="composer">
         <textarea id="input" rows="1" spellcheck="false"

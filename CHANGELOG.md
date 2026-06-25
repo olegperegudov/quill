@@ -3,6 +3,25 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.16 — blank when empty; day separators in the chat (Ribbit parity)
+
+- **Empty chat is empty.** Dropped the "select text and press ⌃⌥E" greeting.
+  First open with no history shows nothing — like Ribbit's log.
+- **Day separators.** Between calendar days the chat now draws a thin rule with
+  a small `we, jun 25th` label (weekday + month + ordinal day). Ported verbatim
+  from Ribbit's `formatDate` + `.date-sep`, placed in chat order (a day's
+  separator heads its first message, oldest day at top).
+- Retention was already Ribbit's exact mechanism (shared `logger.rs`: a rolling
+  window of day-files, today + the previous N-1 days, default 7) — left as is.
+- Select-text → hotkey → it lands in the chat and is corrected automatically was
+  already in place (the `editor:capture` path); no copy/paste needed.
+
+## 0.1.15 — update progress in one place
+
+`downloading NN%` was shown both on the update button and in the header
+subtitle. Now only on the button (Ribbit-style); update failures land there too,
+then re-arm for retry.
+
 ## 0.1.14 — the hotkey opens a chat at the cursor; copy instead of type-back
 
 The editor popup becomes a chat, and the two things that still felt broken

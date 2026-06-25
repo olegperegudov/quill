@@ -176,28 +176,31 @@ body {
   30% { opacity: 1; transform: translateY(-2px); }
 }
 
-/* Empty state — centred greeting before any messages. */
-.empty {
-  margin: auto;
-  text-align: center;
+/* Day separator — a thin rule each side of a small weekday/date label,
+   between calendar days. Copied from Ribbit, on Quill's tokens. */
+.date-sep {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-width: 18rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.2rem 0.15rem;
+}
+.date-sep::before,
+.date-sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+.date-sep::before { background: linear-gradient(to right, transparent, var(--line)); }
+.date-sep::after { background: linear-gradient(to left, transparent, var(--line)); }
+.date-sep-label {
+  font-size: 0.62rem;
   color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.empty-title { font-size: 0.92rem; color: var(--text); font-weight: 500; }
-.empty-sub { font-size: 0.8rem; line-height: 1.55; }
-kbd {
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  padding: 0.05rem 0.35rem;
-  font-family: inherit;
-  font-size: 0.85em;
-  color: var(--text);
-}
+.date-sep:first-child { padding-top: 0.2rem; }
 
 /* Composer ------------------------------------------------------------ */
 .composer {

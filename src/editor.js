@@ -21,9 +21,37 @@ function dlog(msg) {
 
 const scrollToBottom = () => { log.scrollTop = log.scrollHeight; };
 
-function hideEmpty() {
-  const e = $("#empty");
-  if (e) e.style.display = "none";
+// --- Day separators (copied from Ribbit: weekday + month + ordinal day) ---
+
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+}
+
+// e.g. "tu, jun 24th". null/undefined ts → today.
+function formatDate(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const wd = ["su", "mo", "tu", "we", "th", "fr", "sa"][d.getDay()];
+  const mon = d.toLocaleDateString("en-US", { month: "short" }).toLowerCase();
+  const day = d.getDate();
+  return `${wd}, ${mon} ${day}${ordinal(day)}`;
+}
+
+// In chat order (oldest at top), drop a separator above the first message of
+// each calendar day. `lastDay` tracks the day at the bottom of the log.
+let lastDay = null;
+function ensureDay(iso) {
+  const label = formatDate(iso);
+  if (label === lastDay) return;
+  lastDay = label;
+  const sep = document.createElement("div");
+  sep.className = "date-sep";
+  const span = document.createElement("span");
+  span.className = "date-sep-label";
+  span.textContent = label;
+  sep.appendChild(span);
+  log.appendChild(sep);
 }
 
 // Copy a bubble's text and flash a brief "скопировано" on it.
@@ -82,7 +110,7 @@ function addPending() {
 // Send `text` through correct→reply. Each call owns its own pending bubble, so
 // concurrent corrections resolve into their own slots.
 async function runCorrection(text) {
-  hideEmpty();
+  ensureDay();
   addMessage("user", text);
   const pending = addPending();
   try {
@@ -99,11 +127,11 @@ async function loadHistory() {
   try {
     const entries = await invoke("get_log_history", { limit: 50 });
     if (!entries || entries.length === 0) return;
-    hideEmpty();
     // History comes newest-first; a chat reads oldest-at-top.
     for (const e of entries.slice().reverse()) {
       const orig = e.original || "";
       const corr = e.corrected || "";
+      ensureDay(e.ts);
       addMessage("user", orig);
       addMessage("bot", corr, { clean: orig === corr });
     }
@@ -156,7 +184,7 @@ listen("editor:capture", (e) => {
 // Hotkey fired without Accessibility — macOS already showed its dialog; we leave
 // one quiet inline note instead of a blocking overlay.
 listen("editor:need-access", () => {
-  hideEmpty();
+  ensureDay();
   addMessage(
     "system",
     "Нужен доступ в «Универсальный доступ», чтобы я видел выделенный текст. " +
