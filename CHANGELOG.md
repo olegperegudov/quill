@@ -3,6 +3,33 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.11 — main window: a chat-style log + settings behind a gear
+
+Front-end only; the correction flow and the whole Rust side are untouched. The
+main window used to greet you with the model/key card and a hotkey hint up top
+and the history below — settings shouting before you'd done anything. **Now** it
+opens like Ribbit's log: a clean chat-style list of past corrections (newest on
+top), and settings tuck behind a gear in the header.
+
+- **Settings behind the gear.** New `⚙` button in the titlebar toggles between
+  the log (`#log-view`) and a `#settings-panel` that holds Hotkey, Model, API
+  key and the debug-log opener (Ribbit-style label-left / control-right rows).
+  When there's no API key yet, startup auto-opens settings so onboarding still
+  works. View switch is a plain show/hide (`showView`), debug stays an overlay.
+- **Status moved to a header subtitle.** The standalone status pill is gone;
+  the live state ("Ready / working / done / error") is now a quiet line under
+  the wordmark, colour-coded, settling back to "Ready". Keeps the body clean.
+- **Log rows redesigned (`logRow`).** Each finished correction is a flat row —
+  time, the polished text, and on the right a **clock** you *press and hold* to
+  reveal the original (dimmed + italic), releasing to snap back to the corrected
+  text. Pointer-capture on press so the release restores even if the cursor
+  drifts off the button. Unchanged corrections show "already clean" instead of a
+  clock (nothing to peek at). Replaces the old click-anywhere-to-toggle card.
+- **Empty state.** A centred "Nothing yet" + the hotkey hint, shown when the log
+  is empty — the clean welcome, no settings in sight.
+- Data is unchanged: `get_log_history` / the `correction` event / `logger.rs`
+  per-day JSONL store all stay as-is; only the rendering changed.
+
 ## 0.1.10 — editor window: review before it lands (Grammarly-style redesign, phase 1)
 
 The big UX shift. **Was:** the hotkey silently replaced the selection with the

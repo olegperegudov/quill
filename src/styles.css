@@ -1,7 +1,9 @@
-/* Quill — settings window.
+/* Quill — main window.
    Visual language (greenfield, set here): dark slate base shared with the
    Ribbit family, but a softer system-sans for a "writing" feel and an
-   ink-violet accent that's distinctly Quill, not Ribbit's green. */
+   ink-violet accent that's distinctly Quill, not Ribbit's green.
+   The body is Ribbit's chat-style log: flat rows, newest on top. Settings
+   live behind the gear so the log greets you clean. */
 
 :root {
   --bg: #0f1318;
@@ -37,7 +39,7 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   padding: 0.75rem 0.9rem 0.9rem;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 /* Titlebar ------------------------------------------------------------- */
@@ -48,18 +50,32 @@ body {
   flex-shrink: 0;
   padding-top: 0.1rem;
 }
-.brand { display: flex; align-items: center; gap: 0.5rem; }
+.brand { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
 .mark {
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   color: var(--ink);
   transform: rotate(-8deg);
+  flex-shrink: 0;
 }
+.brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .wordmark {
   font-weight: 600;
   font-size: 1rem;
   letter-spacing: 0.02em;
 }
-.win-controls { display: flex; gap: 0.25rem; }
+/* Status as a quiet subtitle under the wordmark — present but never shouting. */
+.status-detail {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-detail.working { color: var(--ink); }
+.status-detail.done { color: var(--good); }
+.status-detail.error { color: #fca5a5; }
+
+.win-controls { display: flex; gap: 0.25rem; flex-shrink: 0; }
 .win-btn {
   width: 22px; height: 22px;
   display: grid; place-items: center;
@@ -72,40 +88,145 @@ body {
   transition: background 0.12s, color 0.12s;
 }
 .win-btn:hover { background: var(--panel-2); color: var(--text); }
+.win-btn.active { color: var(--ink); }
 .win-close:hover { background: #5b2330; color: #ffb4b4; }
 
-/* Status line --------------------------------------------------------- */
-.status {
+/* Log ----------------------------------------------------------------- */
+#log-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+/* One correction. Flat row like Ribbit's log: time, the polished text, and a
+   clock on the right that peeks back at the original. */
+.log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.5rem 0.15rem;
+  border-bottom: 1px solid #1a1f28;
+  animation: fadeIn 0.25s ease;
+}
+.log-entry:hover { background: #161b22; border-radius: 6px; }
+.log-time {
+  font-size: 0.68rem;
+  color: #5a6472;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.05rem;
+}
+.log-text {
+  flex: 1;
+  font-size: 0.83rem;
+  color: var(--text);
+  line-height: 1.45;
+  user-select: text;
+  word-break: break-word;
+}
+/* While the clock is held, the row shows the pre-Quill text — dimmed + italic
+   so it reads as "this was before". */
+.log-text.is-original { color: var(--muted); font-style: italic; }
+.log-clean {
+  font-size: 0.66rem;
+  color: var(--muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* The clock affordance: subtle at rest, ink when you press to rewind. */
+.log-clock {
+  flex-shrink: 0;
+  align-self: center;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #4d5663;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+  touch-action: none;
+}
+.log-clock:hover { color: var(--muted); background: var(--panel-2); }
+.log-entry.peeking .log-clock { color: var(--ink); background: rgba(167,139,250,0.12); }
+.log-clock svg { display: block; }
+
+.history-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+  color: var(--muted);
+  padding: 1rem;
+}
+.he-title { font-size: 0.9rem; color: var(--text); opacity: 0.85; }
+.he-sub { font-size: 0.78rem; line-height: 1.6; max-width: 22rem; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+
+/* Settings ------------------------------------------------------------ */
+.settings-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.setting-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.65rem;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 0.82rem;
-  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.1rem;
+  border-bottom: 1px solid var(--line);
 }
-.status .dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--muted);
-  flex-shrink: 0;
-}
-.status.idle .dot { background: var(--muted); }
-.status.working .dot { background: var(--ink); animation: pulse 1s ease-in-out infinite; }
-.status.done .dot { background: var(--good); }
-.status.error .dot { background: var(--bad); }
-.status.error #status-text { color: #fca5a5; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-
-/* How-to -------------------------------------------------------------- */
-.howto {
+.setting-label {
   font-size: 0.82rem;
   color: var(--muted);
-  line-height: 1.55;
   flex-shrink: 0;
 }
+select, input[type="password"], input[type="text"] {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  max-width: 60%;
+}
+select { cursor: pointer; min-width: 9rem; }
+input:focus, select:focus { border-color: var(--ink-dim); }
+input::placeholder { color: #4d5663; }
+.key-field { display: flex; align-items: center; justify-content: flex-end; flex: 1; }
+.key-field input { flex: 1; max-width: none; }
+.saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.saved .check { color: var(--good); }
+.settings-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.7;
+  padding: 0.6rem 0.1rem;
+}
+
 kbd {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.76rem;
@@ -121,117 +242,17 @@ kbd {
 kbd:hover { border-color: var(--ink-dim); color: var(--ink); }
 kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(167,139,250,0.1); }
 
-/* Card (model + key) -------------------------------------------------- */
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0.65rem 0.7rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  flex-shrink: 0;
-}
-.row { display: flex; align-items: center; gap: 0.6rem; }
-.label {
-  font-size: 0.78rem;
-  color: var(--muted);
-  width: 56px;
-  flex-shrink: 0;
-}
-select, input[type="password"], input[type="text"] {
-  flex: 1;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 0.35rem 0.5rem;
-  font-size: 0.8rem;
-  font-family: inherit;
-  outline: none;
-}
-select { cursor: pointer; }
-input:focus, select:focus { border-color: var(--ink-dim); }
-input::placeholder { color: #4d5663; }
-
-.key-field { flex: 1; display: flex; align-items: center; }
-.saved {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-.saved .check { color: var(--good); }
-.link {
-  color: var(--ink);
-  cursor: pointer;
-  text-decoration: none;
-}
+.link { color: var(--ink); cursor: pointer; text-decoration: none; }
 .link:hover { text-decoration: underline; }
-
-/* History ------------------------------------------------------------- */
-.history {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-.muted { color: var(--muted); background: none; border: none; font-size: 0.72rem; cursor: default; }
-.history-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding-right: 0.15rem;
-}
-.history-row {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 0.45rem 0.55rem;
-  cursor: pointer;
-  transition: border-color 0.12s;
-}
-.history-row:hover { border-color: var(--ink-dim); }
-.hr-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.2rem;
-}
-.hr-time { font-size: 0.68rem; color: var(--muted); }
-.hr-clean { font-size: 0.66rem; color: var(--muted); opacity: 0.7; }
-.hr-text {
-  font-size: 0.82rem;
-  color: var(--text);
-  user-select: text;
-  word-break: break-word;
-}
-.hr-text.is-original { color: var(--muted); font-style: italic; }
-.history-empty {
-  color: var(--muted);
-  font-size: 0.78rem;
-  text-align: center;
-  padding: 1.2rem 0.5rem;
-}
+.muted { color: var(--muted); background: none; border: none; font-size: 0.72rem; text-decoration: none; }
 
 /* Scrollbar */
-.history-list::-webkit-scrollbar { width: 6px; }
-.history-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-.history-list::-webkit-scrollbar-thumb:hover { background: #2f3947; }
+.history-list::-webkit-scrollbar,
+.settings-panel::-webkit-scrollbar { width: 6px; }
+.history-list::-webkit-scrollbar-thumb,
+.settings-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.history-list::-webkit-scrollbar-thumb:hover,
+.settings-panel::-webkit-scrollbar-thumb:hover { background: #2f3947; }
 
 /* Footer -------------------------------------------------------------- */
 .footer {
@@ -255,10 +276,7 @@ input::placeholder { color: #4d5663; }
 }
 .ghost:hover { border-color: var(--ink-dim); color: var(--text); }
 .ghost:disabled { opacity: 0.5; cursor: default; }
-.ghost.ready {
-  border-color: var(--good);
-  color: var(--good);
-}
+.ghost.ready { border-color: var(--good); color: var(--good); }
 
 /* Debug overlay ------------------------------------------------------- */
 .panel {

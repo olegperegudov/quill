@@ -1,8 +1,10 @@
-//! Quill settings window.
+//! Quill main window.
 //!
 //! The window is secondary — the product is the global hotkey, which the Rust
-//! side owns. This UI just lets you set the model + key and the hotkey, and
-//! shows a live status plus a local history of what got corrected.
+//! side owns. The body is a chat-style log of what Quill corrected (newest on
+//! top); each row shows the polished result and a clock you press-and-hold to
+//! peek at the original. Settings (model, key, hotkey) hide behind the gear so
+//! the log greets you clean.
 
 import { shortcutFromEvent, prettyShortcut } from "./shortcut.js";
 
@@ -17,27 +19,25 @@ const $ = (sel) => document.querySelector(sel);
 const IS_MAC = navigator.userAgent.includes("Mac");
 const pretty = (raw) => prettyShortcut(raw, IS_MAC);
 
+// A small clock — its hands are the "rewind to the original" affordance.
+const CLOCK_SVG = `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.7V8l2.1 1.6"/></svg>`;
+
 // Diagnostics without DevTools (disabled in prod builds): goes to the debug log.
 function dlog(msg) {
   try { invoke("js_debug_log", { msg: String(msg) }); } catch (_) {}
-}
-
-function escapeHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
 }
 
 function formatTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-// --- Live status line ---
+// --- Live status (header subtitle) ---
 
 let statusResetTimer = null;
 function setStatus(text, kind = "idle") {
-  $("#status").className = `status ${kind}`;
-  $("#status-text").textContent = text;
+  const el = $("#status-detail");
+  el.className = `status-detail ${kind}`;
+  el.textContent = text;
   clearTimeout(statusResetTimer);
   // Settle back to "Ready" after a terminal state so the line doesn't lie.
   if (kind === "done" || kind === "error") {
@@ -45,41 +45,77 @@ function setStatus(text, kind = "idle") {
   }
 }
 
-// --- History ---
+// --- View switching (log <-> settings) ---
+
+let currentView = "log";
+function showView(name) {
+  currentView = name;
+  $("#log-view").style.display = name === "log" ? "flex" : "none";
+  $("#settings-panel").style.display = name === "settings" ? "flex" : "none";
+  $("#settings-btn").classList.toggle("active", name === "settings");
+}
+
+// --- Log ---
 
 function renderHistory(entries) {
   const list = $("#history-list");
   list.innerHTML = "";
   if (!entries || entries.length === 0) {
-    $("#history-empty").style.display = "block";
+    $("#history-empty").style.display = "flex";
     return;
   }
   $("#history-empty").style.display = "none";
   for (const e of entries) {
-    list.appendChild(historyRow(e));
+    list.appendChild(logRow(e));
   }
 }
 
-function historyRow(e) {
+// One correction as a chat-style row: time, the polished text, and — when the
+// text actually changed — a clock you hold down to reveal the original.
+function logRow(e) {
   const row = document.createElement("div");
-  row.className = "history-row";
+  row.className = "log-entry";
+
+  const time = document.createElement("span");
+  time.className = "log-time";
+  time.textContent = e.ts ? formatTime(e.ts) : "";
+
+  const text = document.createElement("span");
+  text.className = "log-text";
+  text.textContent = e.corrected || "";
+
+  row.append(time, text);
+
   const changed = e.original !== e.corrected;
-  row.innerHTML = `
-    <div class="hr-top">
-      <span class="hr-time">${e.ts ? formatTime(e.ts) : ""}</span>
-      ${changed ? "" : '<span class="hr-clean">no change</span>'}
-    </div>
-    <div class="hr-text">${escapeHtml(e.corrected || "")}</div>`;
   if (changed) {
-    // Click to reveal the original, so you can see what changed.
-    row.title = "click to see the original";
-    row.addEventListener("click", () => {
-      const t = row.querySelector(".hr-text");
-      const showingCorrected = !row.classList.contains("show-original");
-      row.classList.toggle("show-original", showingCorrected);
-      t.textContent = showingCorrected ? e.original : e.corrected;
-      t.classList.toggle("is-original", showingCorrected);
-    });
+    const clock = document.createElement("button");
+    clock.className = "log-clock";
+    clock.title = "hold to see the original";
+    clock.tabIndex = -1;
+    clock.innerHTML = CLOCK_SVG;
+
+    const showOriginal = (ev) => {
+      ev.preventDefault();
+      // Capture the pointer so release restores even if the cursor drifts off.
+      try { clock.setPointerCapture(ev.pointerId); } catch (_) {}
+      text.textContent = e.original;
+      text.classList.add("is-original");
+      row.classList.add("peeking");
+    };
+    const restore = () => {
+      text.textContent = e.corrected;
+      text.classList.remove("is-original");
+      row.classList.remove("peeking");
+    };
+    clock.addEventListener("pointerdown", showOriginal);
+    clock.addEventListener("pointerup", restore);
+    clock.addEventListener("pointercancel", restore);
+    row.appendChild(clock);
+  } else {
+    const clean = document.createElement("span");
+    clean.className = "log-clean";
+    clean.textContent = "already clean";
+    row.appendChild(clean);
   }
   return row;
 }
@@ -97,7 +133,7 @@ async function loadHistory() {
 function prependCorrection(e) {
   $("#history-empty").style.display = "none";
   const list = $("#history-list");
-  list.insertBefore(historyRow({ ...e, ts: new Date().toISOString() }), list.firstChild);
+  list.insertBefore(logRow({ ...e, ts: new Date().toISOString() }), list.firstChild);
 }
 
 // --- Provider + key ---
@@ -241,6 +277,8 @@ async function main() {
   // Window controls
   $("#win-min").addEventListener("click", () => getCurrentWindow().minimize());
   $("#win-close").addEventListener("click", () => invoke("hide_to_tray"));
+  $("#settings-btn").addEventListener("click", () =>
+    showView(currentView === "settings" ? "log" : "settings"));
 
   // Provider switch
   $("#provider-select").addEventListener("change", async (e) => {
@@ -271,7 +309,7 @@ async function main() {
     keyInput.focus();
   });
 
-  // Debug panel
+  // Debug panel (opened from settings)
   $("#debug-btn").addEventListener("click", async () => {
     $("#debug-content").textContent = await invoke("get_debug_log");
     $("#debug-panel").style.display = "flex";
@@ -288,13 +326,17 @@ async function main() {
   await listen("correction", (e) => prependCorrection(e.payload));
 
   // Initial state
+  showView("log");
   const cfg = await refreshConfig();
-  $("#shortcut-display").textContent = pretty(await invoke("get_shortcut"));
+  const shortcut = pretty(await invoke("get_shortcut"));
+  $("#shortcut-display").textContent = shortcut;
+  $("#empty-shortcut").textContent = shortcut;
   setupShortcutCapture();
   await setupUpdates();
   await loadHistory();
   if (!cfg.has_api_key) {
-    setStatus("Add an API key to get started", "working");
+    setStatus("Add an API key in settings", "working");
+    showView("settings");
     keyInput.focus();
   }
 }

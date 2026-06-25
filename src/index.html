@@ -12,35 +12,44 @@
       <header class="titlebar" data-tauri-drag-region>
         <div class="brand" data-tauri-drag-region>
           <span class="mark" data-tauri-drag-region>✒</span>
-          <span class="wordmark" data-tauri-drag-region>Quill</span>
+          <div class="brand-text" data-tauri-drag-region>
+            <span class="wordmark" data-tauri-drag-region>Quill</span>
+            <!-- Live state of the most recent correction; settles back to "Ready". -->
+            <span id="status-detail" class="status-detail idle" data-tauri-drag-region>Ready</span>
+          </div>
         </div>
         <div class="win-controls">
+          <button id="settings-btn" class="win-btn" title="Settings">&#x2699;</button>
           <button id="win-min" class="win-btn" title="Minimize">&#x2212;</button>
           <button id="win-close" class="win-btn win-close" title="Close to tray">&#x2715;</button>
         </div>
       </header>
 
-      <!-- Live status of the most recent correction -->
-      <div id="status" class="status idle">
-        <span id="status-dot" class="dot"></span>
-        <span id="status-text">Ready</span>
+      <!-- The log. Each row is a finished correction (newest on top); the text
+           shown is the polished result, the clock peeks back at the original. -->
+      <div id="log-view">
+        <div id="history-list" class="history-list"></div>
+        <div id="history-empty" class="history-empty">
+          <p class="he-title">Nothing yet.</p>
+          <p class="he-sub">
+            Select text in any app and press
+            <kbd id="empty-shortcut">⌃⌥E</kbd> — your corrections land here.
+          </p>
+        </div>
       </div>
 
-      <!-- How it works: the hotkey is the whole interface -->
-      <section class="howto">
-        Select text in any app, then press
-        <kbd id="shortcut-display" title="Click to change">⌃⌥E</kbd>
-        to polish it.
-      </section>
-
-      <!-- Provider + key -->
-      <section class="card">
-        <div class="row">
-          <label class="label" for="provider-select">Model</label>
+      <!-- Settings live behind the gear so the log greets you clean. -->
+      <section id="settings-panel" class="settings-panel" style="display:none">
+        <div class="setting-row">
+          <span class="setting-label">Hotkey</span>
+          <kbd id="shortcut-display" title="Click to change">⌃⌥E</kbd>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="provider-select">Model</label>
           <select id="provider-select"></select>
         </div>
-        <div class="row">
-          <label class="label" for="key-input">API key</label>
+        <div class="setting-row">
+          <label class="setting-label" for="key-input">API key</label>
           <div class="key-field">
             <input type="password" id="key-input" placeholder="paste token" autocomplete="off" />
             <span id="key-saved" class="saved" style="display:none">
@@ -48,22 +57,16 @@
             </span>
           </div>
         </div>
-      </section>
-
-      <!-- Recent corrections -->
-      <section class="history">
-        <div class="history-head">
-          <span>Recent</span>
-          <button id="history-clear-hint" class="muted" title="Corrections are kept locally only" tabindex="-1">local only</button>
+        <div class="setting-row">
+          <span class="setting-label">Debug log</span>
+          <button id="debug-btn" class="ghost" title="Debug log">&gt;_</button>
         </div>
-        <div id="history-list" class="history-list"></div>
-        <div id="history-empty" class="history-empty">Nothing yet — your corrections will show up here.</div>
+        <p class="settings-note">Corrections are kept on this computer only.</p>
       </section>
 
       <footer class="footer">
         <a id="version" class="muted link" href="#" title="changelog">v0.0.0</a>
         <div class="footer-right">
-          <button id="debug-btn" class="ghost" title="Debug log">&gt;_</button>
           <button id="update-btn" class="ghost" title="Check for updates">check update</button>
         </div>
       </footer>
