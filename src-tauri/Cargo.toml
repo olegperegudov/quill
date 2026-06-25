@@ -1,6 +1,6 @@
 [package]
 name = "quill"
-version = "0.1.16"
+version = "0.1.17"
 description = "Polish your writing in place — fix grammar in any app via a hotkey"
 authors = ["Oleg Peregudov"]
 edition = "2021"
