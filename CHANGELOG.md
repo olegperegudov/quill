@@ -3,6 +3,46 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.14 — the hotkey opens a chat at the cursor; copy instead of type-back
+
+The editor popup becomes a chat, and the two things that still felt broken
+after 0.1.13 are fixed.
+
+**What was wrong.**
+- The popup opened on whichever Space it last lived on. The user pressed the
+  hotkey, saw nothing, and only later found the window on another desktop.
+- The 0.1.13 "grant Accessibility" screen was a half-screen overlay that
+  couldn't be moved or closed — worse than the problem. The macOS system
+  prompt already does the job.
+- Typing the corrected text back over the selection was the fragile half of
+  the Accessibility story. Copying needs none of that reach.
+
+**The redesign.**
+- `editor.*` is now a chat. The captured selection lands as your bubble (accent,
+  right); the correction replies below it (panel, left). A composer at the
+  bottom takes typed/pasted text — Enter sends, Shift+Enter newlines — through
+  the same correct→reply path, so re-polishing is: click your bubble (copies),
+  paste, tweak, Enter. **Click any bubble to copy it** to the clipboard; you
+  paste it yourself. No more type-back, no clock-to-rewind tongues.
+- **Window opens at the mouse cursor**, clamped to the cursor's screen, on the
+  active Space. New `mac_window::position_at_cursor` (`NSEvent.mouseLocation` +
+  `NSScreen.visibleFrame`), run on the main thread before `show()`.
+- **No in-app permission overlay.** When Accessibility isn't granted the hotkey
+  pops the real macOS dialog and shows the chat with one quiet inline note
+  (`editor:need-access`).
+- Dropped the type-back path: removed `inserter.rs`, `mac_focus.rs`,
+  `apply_correction`, and `AppState::target_pid`. Added `copy_to_clipboard`
+  (arboard) and `show_main_window` (the gear → settings, landing on the
+  settings view via `show-settings`).
+- `editor_correct` now records the original→corrected pair in history itself
+  (unchanged "already clean" text isn't logged). History loads into the chat
+  oldest-at-top on open.
+- The chat's gear glows green when an update is waiting; the install button
+  still lives in settings.
+
+Capture still uses the synthetic ⌘C, so reading the selection needs
+Accessibility — but that is now the *only* thing that does.
+
 ## 0.1.13 — the hotkey never dies silently; ask for Accessibility out loud
 
 The recurring "Quill doesn't work after an update" finally fixed at the root.

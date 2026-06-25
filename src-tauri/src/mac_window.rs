@@ -70,3 +70,67 @@ pub fn apply_spaces_behavior(window: &tauri::WebviewWindow) -> Result<(), String
 pub fn apply_spaces_behavior(_window: &tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
 }
+
+/// Move the window so it's centred on the mouse cursor, clamped to stay fully on
+/// whichever screen the cursor is on. The hotkey pops the chat where you're
+/// already looking instead of on some other Space (combined with
+/// `apply_spaces_behavior`, which brings it to the active Space).
+///
+/// Must run on the main thread — it talks to AppKit directly. All coordinates
+/// are Cocoa screen points: bottom-left origin, y pointing up, same convention
+/// as `NSEvent.mouseLocation`, so no flipping is needed.
+#[cfg(target_os = "macos")]
+pub fn position_at_cursor(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::{NSPoint, NSRect};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let ns_window = window.ns_window().map_err(|e| e.to_string())? as id;
+    unsafe {
+        let mouse: NSPoint = msg_send![class!(NSEvent), mouseLocation];
+
+        // The usable area (minus menu bar/Dock) of the screen under the cursor.
+        // Fall back to the main screen if the cursor isn't inside any frame.
+        let mut visible: NSRect = {
+            let main: id = msg_send![class!(NSScreen), mainScreen];
+            if main == nil {
+                return Err("no main screen".into());
+            }
+            msg_send![main, visibleFrame]
+        };
+        let screens: id = msg_send![class!(NSScreen), screens];
+        if screens != nil {
+            let count: usize = msg_send![screens, count];
+            for i in 0..count {
+                let scr: id = msg_send![screens, objectAtIndex: i];
+                let f: NSRect = msg_send![scr, frame];
+                if mouse.x >= f.origin.x
+                    && mouse.x <= f.origin.x + f.size.width
+                    && mouse.y >= f.origin.y
+                    && mouse.y <= f.origin.y + f.size.height
+                {
+                    visible = msg_send![scr, visibleFrame];
+                    break;
+                }
+            }
+        }
+
+        let frame: NSRect = msg_send![ns_window, frame];
+        let (w, h) = (frame.size.width, frame.size.height);
+
+        // Centre on the cursor, then pull back inside the visible area so the
+        // whole window is reachable (titlebar never under the menu bar). Hand-
+        // rolled clamp so a window larger than the screen can't panic clamp().
+        let clamp = |v: f64, lo: f64, hi: f64| if hi < lo { lo } else { v.max(lo).min(hi) };
+        let x = clamp(mouse.x - w / 2.0, visible.origin.x, visible.origin.x + visible.size.width - w);
+        let y = clamp(mouse.y - h / 2.0, visible.origin.y, visible.origin.y + visible.size.height - h);
+
+        let _: () = msg_send![ns_window, setFrameOrigin: NSPoint::new(x, y)];
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn position_at_cursor(_window: &tauri::WebviewWindow) -> Result<(), String> {
+    Ok(())
+}

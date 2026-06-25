@@ -1,7 +1,7 @@
-/* Quill editor window — the review-and-apply surface.
-   Mirrors the settings window's visual language (see styles.css): dark slate
-   base, ink-violet accent, system-sans. Kept self-contained so the editor page
-   loads on its own; the token block is a deliberate copy of styles.css :root. */
+/* Quill chat window — the hotkey surface.
+   Same visual language as the settings window (styles.css): dark slate base,
+   ink-violet accent, system-sans. Self-contained so the page loads on its own;
+   the token block is a deliberate copy of styles.css :root. */
 
 :root {
   --bg: #0f1318;
@@ -28,15 +28,13 @@ body {
   user-select: none;
 }
 
-.editor {
+.chat {
   display: flex;
   flex-direction: column;
   height: 100vh;
   background: var(--bg);
   border-radius: var(--radius);
   overflow: hidden;
-  padding: 0.6rem 0.75rem 0.75rem;
-  gap: 0.6rem;
 }
 
 /* Titlebar ------------------------------------------------------------- */
@@ -45,6 +43,7 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  padding: 0.5rem 0.6rem 0.45rem 0.7rem;
 }
 .brand { display: flex; align-items: center; gap: 0.45rem; }
 .mark { color: var(--ink); font-size: 1rem; transform: rotate(-8deg); }
@@ -54,122 +53,189 @@ body {
   letter-spacing: 0.02em;
   color: var(--muted);
 }
+.win-controls { display: flex; gap: 0.15rem; }
 .win-btn {
-  width: 22px; height: 22px;
+  width: 24px; height: 24px;
   display: grid; place-items: center;
   background: transparent;
   border: none;
   color: var(--muted);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   transition: background 0.12s, color 0.12s;
 }
 .win-btn:hover { background: var(--panel-2); color: var(--text); }
 .win-close:hover { background: #5b2330; color: #ffb4b4; }
 
-/* Text canvas --------------------------------------------------------- */
-.canvas { flex: 1; min-height: 0; display: flex; }
-textarea#text {
+/* The gear glows when an update is waiting (install button is in settings). */
+.win-btn.update-available {
+  color: var(--good);
+  animation: gear-pulse 1.8s ease-in-out infinite;
+}
+@keyframes gear-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Conversation -------------------------------------------------------- */
+.log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem 0.7rem;
+}
+
+.msg { display: flex; flex-direction: column; max-width: 84%; }
+.msg-user { align-self: flex-end; align-items: flex-end; }
+.msg-bot { align-self: flex-start; align-items: flex-start; }
+.msg-system { align-self: stretch; align-items: center; max-width: 100%; }
+
+.bubble {
+  position: relative;
+  padding: 0.5rem 0.7rem;
+  border-radius: 13px;
+  line-height: 1.5;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: pointer;
+  transition: filter 0.12s, box-shadow 0.12s;
+}
+/* Your text — accent tint, tail on the right. */
+.msg-user .bubble {
+  background: var(--ink-dim);
+  color: #f3effe;
+  border-bottom-right-radius: 4px;
+}
+/* The correction — panel, tail on the left. */
+.msg-bot .bubble {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+}
+.bubble:hover { filter: brightness(1.08); }
+.msg-bot .bubble:hover { box-shadow: 0 0 0 1px var(--ink-dim); }
+
+/* "click to copy" → "скопировано ✓" flash. */
+.bubble.copied { box-shadow: 0 0 0 1px var(--good); }
+.bubble.copied::after {
+  content: "скопировано ✓";
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  background: var(--good);
+  color: #08210f;
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.bubble--clean { opacity: 0.72; }
+.clean-tag {
+  font-size: 0.66rem;
+  color: var(--muted);
+  margin-top: 0.18rem;
+  padding-left: 0.2rem;
+}
+
+/* System note — quiet, centred, not copyable. */
+.msg-system .bubble {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  cursor: default;
+  font-size: 0.78rem;
+  text-align: center;
+  line-height: 1.5;
+}
+.msg-system .bubble:hover { filter: none; }
+
+/* Thinking dots while a correction runs. */
+.bubble--pending { display: flex; gap: 4px; cursor: default; padding: 0.6rem 0.7rem; }
+.bubble--pending:hover { filter: none; }
+.bubble--pending span {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: dot 1.1s ease-in-out infinite;
+}
+.bubble--pending span:nth-child(2) { animation-delay: 0.18s; }
+.bubble--pending span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* Empty state — centred greeting before any messages. */
+.empty {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 18rem;
+  color: var(--muted);
+}
+.empty-title { font-size: 0.92rem; color: var(--text); font-weight: 500; }
+.empty-sub { font-size: 0.8rem; line-height: 1.55; }
+kbd {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0.05rem 0.35rem;
+  font-family: inherit;
+  font-size: 0.85em;
+  color: var(--text);
+}
+
+/* Composer ------------------------------------------------------------ */
+.composer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem 0.65rem;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+#input {
   flex: 1;
   resize: none;
+  max-height: 140px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--text);
-  padding: 0.7rem 0.8rem;
+  padding: 0.5rem 0.65rem;
   font-family: inherit;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
   outline: none;
   user-select: text;
   -webkit-user-select: text;
 }
-textarea#text:focus { border-color: var(--ink-dim); }
-textarea#text::placeholder { color: #4d5663; }
-
-/* Footer bar ---------------------------------------------------------- */
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+#input:focus { border-color: var(--ink-dim); }
+#input::placeholder { color: #4d5663; }
+.send {
   flex-shrink: 0;
-  gap: 0.6rem;
-}
-.status {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  min-width: 0;
-}
-.status .dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--muted);
-  flex-shrink: 0;
-}
-.status.working .dot { background: var(--ink); animation: pulse 1s ease-in-out infinite; }
-.status.done .dot { background: var(--good); }
-.status.error .dot { background: var(--bad); }
-.status.error #status-text { color: #fca5a5; }
-#status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-
-.actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
-.btn {
-  border-radius: 7px;
-  padding: 0.35rem 0.7rem;
-  font-size: 0.78rem;
-  font-family: inherit;
-  cursor: pointer;
-  border: 1px solid var(--line);
-  transition: all 0.12s;
-  white-space: nowrap;
-}
-.btn.ghost { background: transparent; color: var(--muted); }
-.btn.ghost:hover { border-color: var(--ink-dim); color: var(--text); }
-.btn.primary {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
   background: var(--ink);
-  border-color: var(--ink);
+  border: none;
+  border-radius: 9px;
   color: #15101f;
-  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
 }
-.btn.primary:hover { background: #b89dfb; border-color: #b89dfb; }
-.btn:disabled { opacity: 0.5; cursor: default; }
-
-/* Accessibility-needed screen ----------------------------------------- */
-.perm-overlay {
-  position: absolute;
-  inset: 0;
-  background: var(--bg);
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.2rem;
-  z-index: 20;
-}
-.perm-card {
-  max-width: 24rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 0.7rem;
-}
-.perm-mark {
-  font-size: 1.8rem;
-  color: var(--ink);
-  transform: rotate(-8deg);
-}
-.perm-title { font-size: 1rem; font-weight: 600; color: var(--text); }
-.perm-body { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
-.perm-body b { color: var(--text); font-weight: 600; }
-.perm-hint {
-  font-size: 0.78rem;
-  color: #fca5a5;
-  min-height: 1rem;
-}
-.perm-actions { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
+.send:hover { background: #b89dfb; }

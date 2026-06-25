@@ -4,54 +4,38 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="editor.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quill — правка</title>
+    <title>Quill</title>
     <script type="module" src="/editor.js" defer></script>
   </head>
   <body>
-    <main class="editor">
+    <main class="chat">
       <header class="titlebar" data-tauri-drag-region>
         <div class="brand" data-tauri-drag-region>
           <span class="mark" data-tauri-drag-region>✒</span>
-          <span class="wordmark" data-tauri-drag-region>Правка</span>
+          <span class="wordmark" data-tauri-drag-region>Quill</span>
         </div>
-        <button id="close" class="win-btn win-close" title="Закрыть без изменений">&#x2715;</button>
+        <div class="win-controls">
+          <button id="settings-btn" class="win-btn" title="Настройки">&#x2699;</button>
+          <button id="close" class="win-btn win-close" title="Скрыть (Esc)">&#x2715;</button>
+        </div>
       </header>
 
-      <div class="canvas">
-        <textarea id="text" spellcheck="false" placeholder="Текст появится здесь…"></textarea>
-      </div>
-
-      <footer class="bar">
-        <div id="status" class="status idle">
-          <span id="dot" class="dot"></span>
-          <span id="status-text">Готово</span>
-        </div>
-        <div class="actions">
-          <button id="cancel" class="btn ghost" title="Esc">Отмена</button>
-          <button id="recheck" class="btn ghost">Перепроверить</button>
-          <button id="apply" class="btn primary" title="⌘⏎">Применить</button>
-        </div>
-      </footer>
-
-      <!-- Shown instead of the editor when macOS Accessibility isn't granted —
-           so a hotkey press never just dies in silence. -->
-      <div id="perm-overlay" class="perm-overlay" style="display:none">
-        <div class="perm-card">
-          <span class="perm-mark">✒</span>
-          <div class="perm-title">Quill нужен доступ</div>
-          <p class="perm-body">
-            Чтобы прочитать выделенный текст и впечатать исправление обратно,
-            macOS должен разрешить Quill в разделе
-            <b>Конфиденциальность → Универсальный доступ</b>.
-            Системный запрос уже открыт — либо нажми кнопку ниже и включи Quill.
-          </p>
-          <p id="perm-hint" class="perm-hint"></p>
-          <div class="perm-actions">
-            <button id="perm-open" class="btn primary">Открыть настройки</button>
-            <button id="perm-retry" class="btn ghost">Я включил — проверить</button>
-          </div>
+      <!-- The conversation: your text as a bubble, the correction below it.
+           Click any bubble to copy it. Empty hint lives here until messages land. -->
+      <div id="log" class="log">
+        <div id="empty" class="empty">
+          <p class="empty-title">Выдели текст и нажми <kbd id="empty-shortcut">⌃⌥E</kbd></p>
+          <p class="empty-sub">Исправленный вариант появится здесь. Нажми на любое облачко — скопируется в буфер.</p>
         </div>
       </div>
+
+      <form id="composer" class="composer">
+        <textarea id="input" rows="1" spellcheck="false"
+                  placeholder="Напиши или вставь текст…  Enter — отправить"></textarea>
+        <button id="send" class="send" type="submit" title="Отправить (Enter)" aria-label="Отправить">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3.5"/><path d="M3.8 7.2 8 3l4.2 4.2"/></svg>
+        </button>
+      </form>
     </main>
   </body>
 </html>

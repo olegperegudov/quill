@@ -400,6 +400,8 @@ async function main() {
   });
   await listen("error", (e) => setStatus(e.payload, "error"));
   await listen("correction", (e) => prependCorrection(e.payload));
+  // Opened from the chat's gear — land on settings, not the history.
+  await listen("show-settings", () => showView("settings"));
 
   // Initial state
   showView("log");

@@ -4,8 +4,8 @@
 //! we do what every "fix my selection" tool does: synthesize the Copy shortcut
 //! and read the clipboard. To stay polite to clipboard managers we borrow the
 //! clipboard for a fraction of a second and put the user's original content
-//! back — Quill inserts the corrected text by *typing* it (see inserter.rs),
-//! not by pasting, so the clipboard is only ever touched here, during capture.
+//! back. The corrected text never auto-pastes; the user copies it from the chat
+//! when they want it, so the clipboard is only touched here, during capture.
 //!
 //! How we tell "nothing was selected" from "selected empty-ish text": we seed
 //! the clipboard with a sentinel before sending Copy and poll until it changes.

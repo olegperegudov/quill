@@ -3,10 +3,10 @@
 //! version — spelling, punctuation, grammar fixed, meaning and tone preserved.
 //!
 //! This is the heart of Quill. The selection capture (selection.rs) feeds raw
-//! text in; the corrected text goes back out to inserter.rs which types it over
-//! the still-active selection.
+//! text in; the corrected text comes back out into the chat window, where the
+//! user clicks a bubble to copy it.
 //!
-//! On any error/timeout the caller leaves the selection untouched, so a failed
+//! On any error/timeout nothing is logged or shown as a result, so a failed
 //! call never destroys the user's text.
 
 use std::sync::OnceLock;

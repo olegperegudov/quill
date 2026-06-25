@@ -8,19 +8,21 @@
 //! Where the pieces live:
 //! - selection.rs — grab the current selection (synthetic Copy + clipboard)
 //! - corrector.rs — call the LLM, return corrected text
-//! - inserter.rs  — type the result over the still-active selection
-//! - secrets.rs   — API key in the OS keychain
 //! - logger.rs    — local history of corrections (original → corrected)
+//! - secrets.rs   — API key in the OS keychain
+//!
+//! The hotkey opens a chat window at the cursor showing your text and its
+//! correction; you click a bubble to copy the result and paste it yourself —
+//! Quill no longer types over the selection (which needed extra Accessibility
+//! reach and broke on every update). Capture still uses a synthetic Copy.
 //!
 //! Forked from Ribbit (voice-to-text); the tray/updater/window/TCC plumbing is
-//! shared, the audio pipeline is replaced by the selection→correct→insert flow.
+//! shared, the audio pipeline is replaced by the selection→correct→chat flow.
 
 mod accessibility;
 mod corrector;
 mod debug_log;
-mod inserter;
 mod logger;
-mod mac_focus;
 mod mac_window;
 mod secrets;
 mod selection;
@@ -43,9 +45,6 @@ struct AppState {
     /// (key repeat, double-tap) before the previous run finishes.
     busy: bool,
     current_shortcut: String,
-    /// PID of the app that was frontmost when the hotkey fired, so "Apply" can
-    /// re-activate it and type the result back. None off-macOS or if unknown.
-    target_pid: Option<i32>,
 }
 
 #[tauri::command]
@@ -271,15 +270,15 @@ fn set_shortcut(
     Ok(())
 }
 
-/// Hotkey entry point: grab the selection and open the editor window over it,
-/// remembering which app was frontmost so we can type the result back later.
-/// The actual LLM round-trip is kicked off from the editor (editor_correct), so
+/// Hotkey entry point: grab the selection and open the chat window at the
+/// cursor. The LLM round-trip is kicked off from the chat (editor_correct), so
 /// this only does the fast capture. Runs on its own thread so the hotkey handler
 /// never blocks; re-entrancy is guarded by `AppState::busy`.
 ///
 /// The window opens no matter what — a hotkey that does nothing reads as
-/// "broken". If Accessibility isn't granted (so ⌘C/typing can't work), we pop
-/// the real macOS prompt and open the editor on its "grant access" screen.
+/// "broken". If Accessibility isn't granted (so the synthetic ⌘C can't read the
+/// selection), we pop the real macOS prompt and open the chat with a short note
+/// instead of failing silently.
 fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
     {
         let mut s = state.lock().unwrap();
@@ -292,31 +291,31 @@ fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
     let app = app.clone();
     let state = Arc::clone(state);
     std::thread::spawn(move || {
-        let show_editor = || match app.get_webview_window("editor") {
-            Some(w) => {
+        // Position at the cursor and show — both are AppKit work, so marshal
+        // them onto the main thread. Positioning before show means the window
+        // appears under the mouse on the current Space, not wherever it last sat.
+        let show_editor = || {
+            let Some(w) = app.get_webview_window("editor") else {
+                debug_log::log("editor window missing — cannot open");
+                return false;
+            };
+            let _ = app.run_on_main_thread(move || {
+                let _ = mac_window::position_at_cursor(&w);
                 let _ = w.show();
                 let _ = w.set_focus();
-                true
-            }
-            None => {
-                debug_log::log("editor window missing — cannot open");
-                false
-            }
+            });
+            true
         };
 
-        // Remember the target app while it's still frontmost — our editor window
-        // hasn't been shown yet, so whatever is frontmost now is where the text
-        // came from and where it must go back.
-        let target_pid = mac_focus::remember_frontmost();
-
-        // No Accessibility → no synthetic ⌘C and no type-back. Rather than fail
-        // silently (the old behaviour that made the hotkey look dead), ask macOS
-        // for the grant via its own dialog and open the editor explaining it.
+        // No Accessibility → the synthetic ⌘C can't read the selection. Rather
+        // than fail silently (the old behaviour that made the hotkey look dead),
+        // ask macOS for the grant via its own dialog and open the chat with a
+        // one-line note. No half-screen overlay — the system prompt is enough.
         if !accessibility::is_trusted() {
             debug_log::log("hotkey fired → accessibility not granted; prompting");
             accessibility::prompt();
             if show_editor() {
-                let _ = app.emit("editor:permission", ());
+                let _ = app.emit("editor:need-access", ());
             }
             state.lock().unwrap().busy = false;
             return;
@@ -334,17 +333,12 @@ fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
                 String::new()
             }
         };
-        debug_log::log(&format!(
-            "captured {} chars, target pid {:?}",
-            text.chars().count(),
-            target_pid
-        ));
+        debug_log::log(&format!("captured {} chars", text.chars().count()));
 
-        // Open even on an empty capture: the user gets a window to type or paste
+        // Open even on an empty capture: the user gets a chat to type or paste
         // into instead of a dead key press.
-        state.lock().unwrap().target_pid = target_pid;
         if show_editor() {
-            let _ = app.emit("editor:open", &text);
+            let _ = app.emit("editor:capture", &text);
         }
 
         state.lock().unwrap().busy = false;
@@ -367,62 +361,50 @@ fn resolve_provider_and_key() -> Result<(&'static corrector::ProviderConfig, Str
     Ok((provider, key))
 }
 
-/// Correct the editor's text. Async + spawn_blocking so the editor UI keeps
-/// animating during the LLM round-trip.
+/// Correct a chat message and record the pair in history. Async + spawn_blocking
+/// so the chat UI keeps animating during the LLM round-trip. Unchanged text
+/// ("already clean") isn't logged — there's nothing to keep.
 #[tauri::command]
 async fn editor_correct(text: String) -> Result<String, String> {
     let (provider, key) = resolve_provider_and_key()?;
-    tauri::async_runtime::spawn_blocking(move || corrector::correct_text(&text, provider, &key))
-        .await
-        .map_err(|e| format!("correction task failed: {}", e))?
-}
-
-/// Apply the edited text: record it in history, hide the editor, re-activate the
-/// app that was frontmost when the hotkey fired, and type the text over its
-/// (still-present) selection.
-#[tauri::command]
-fn apply_correction(
-    app: AppHandle,
-    original: String,
-    text: String,
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-) {
-    logger::log_correction(&original, &text);
-    let _ = app.emit(
-        "correction",
-        serde_json::json!({ "original": original, "corrected": text }),
-    );
-
-    if let Some(w) = app.get_webview_window("editor") {
-        let _ = w.hide();
+    let original = text.clone();
+    let corrected =
+        tauri::async_runtime::spawn_blocking(move || corrector::correct_text(&text, provider, &key))
+            .await
+            .map_err(|e| format!("correction task failed: {}", e))??;
+    if corrected != original {
+        logger::log_correction(&original, &corrected);
     }
-
-    let target_pid = state.lock().unwrap().target_pid;
-    let app_for_thread = app.clone();
-    std::thread::spawn(move || {
-        if let Some(pid) = target_pid {
-            // AppKit window activation is main-thread work; queue it there, then
-            // give focus a moment to settle before typing.
-            let _ = app_for_thread.run_on_main_thread(move || {
-                if let Err(e) = mac_focus::activate(pid) {
-                    debug_log::log(&format!("apply: activate failed: {}", e));
-                }
-            });
-        }
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        if let Err(e) = inserter::insert_text(&text) {
-            debug_log::log(&format!("apply: insert failed: {}", e));
-        } else {
-            debug_log::log(&format!("applied {} chars", text.chars().count()));
-        }
-    });
+    Ok(corrected)
 }
 
-/// Cancel: hide the editor without typing anything back.
+/// Put text on the clipboard — the chat's "click a bubble to copy" action, so
+/// the user pastes the result wherever they want. Reuses arboard (same crate
+/// the capture path borrows the clipboard with).
+#[tauri::command]
+fn copy_to_clipboard(text: String) -> Result<(), String> {
+    arboard::Clipboard::new()
+        .and_then(|mut c| c.set_text(text))
+        .map_err(|e| e.to_string())
+}
+
+/// Cancel: hide the chat window.
 #[tauri::command]
 fn close_editor(app: AppHandle) {
     if let Some(w) = app.get_webview_window("editor") {
         let _ = w.hide();
+    }
+}
+
+/// Open the settings window (the chat's gear). Lands straight on the settings
+/// view rather than the history, via the `show-settings` event.
+#[tauri::command]
+fn show_main_window(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = app.emit("show-settings", ());
     }
 }
 
@@ -540,7 +522,6 @@ pub fn run() {
     let state = Arc::new(Mutex::new(AppState {
         busy: false,
         current_shortcut: saved_shortcut,
-        target_pid: None,
     }));
 
     tauri::Builder::default()
@@ -565,8 +546,9 @@ pub fn run() {
             install_update,
             get_current_version,
             editor_correct,
-            apply_correction,
+            copy_to_clipboard,
             close_editor,
+            show_main_window,
             accessibility_status,
             open_accessibility_settings
         ])
