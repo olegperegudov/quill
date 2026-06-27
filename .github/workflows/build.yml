@@ -60,7 +60,8 @@ jobs:
           "
 
           sed -i "s/^version = \"$CURRENT\"/version = \"$NEW\"/" src-tauri/Cargo.toml
-          sed -i "s/v$CURRENT/v$NEW/" src/index.html
+          # The UI reads its version at runtime via get_current_version
+          # (CARGO_PKG_VERSION) — no HTML placeholder to bump here.
 
           # Commit and tag
           git config user.name "github-actions[bot]"
