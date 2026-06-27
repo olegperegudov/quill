@@ -201,12 +201,7 @@ export async function initSettings() {
     keyInput.focus();
   });
 
-  // Debug panel (overlay above settings)
-  $("#debug-btn").addEventListener("click", async () => {
-    $("#debug-content").textContent = await invoke("get_debug_log");
-    $("#debug-panel").style.display = "flex";
-  });
-  $("#debug-close").addEventListener("click", () => { $("#debug-panel").style.display = "none"; });
+  // (The Debug log button/back are wired in editor.js — it owns view switching.)
 
   // Initial state
   const cfg = await refreshConfig();

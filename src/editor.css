@@ -1,5 +1,6 @@
-/* Quill — the one window. The chat is the hotkey surface; settings and the
-   debug log are overlays flipped over it by the gear (.panel, below).
+/* Quill — the one window. The titlebar stays put; below it the body swaps
+   between the chat (hotkey surface), settings, and the debug log — the gear
+   flips chat ↔ settings (.view-panel, below). Ribbit-style view switch.
    Visual language (greenfield, set here): dark slate base shared with the
    Ribbit family, a softer system-sans for a "writing" feel, and an ink-violet
    accent that's distinctly Quill, not Ribbit's green. */
@@ -47,15 +48,16 @@ body {
   flex-shrink: 0;
   padding: 0.5rem 0.6rem 0.45rem 0.7rem;
 }
-.brand { display: flex; align-items: center; gap: 0.45rem; }
-.mark { color: var(--ink); font-size: 1rem; transform: rotate(-8deg); }
+.brand { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.mark { color: var(--ink); font-size: 1rem; transform: rotate(-8deg); flex-shrink: 0; }
+.brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
 .wordmark {
   font-weight: 600;
   font-size: 0.9rem;
   letter-spacing: 0.02em;
   color: var(--muted);
 }
-.win-controls { display: flex; gap: 0.15rem; }
+.win-controls { display: flex; gap: 0.15rem; flex-shrink: 0; }
 .win-btn {
   width: 24px; height: 24px;
   display: grid; place-items: center;
@@ -68,6 +70,7 @@ body {
   transition: background 0.12s, color 0.12s;
 }
 .win-btn:hover { background: var(--panel-2); color: var(--text); }
+.win-btn.active { background: var(--panel-2); color: var(--ink); }
 .win-close:hover { background: #5b2330; color: #ffb4b4; }
 
 /* The gear glows when an update is waiting (install button is in settings). */
@@ -245,35 +248,20 @@ body {
 }
 .send:hover { background: #b89dfb; }
 
-/* Overlays (settings, debug) ----------------------------------------- */
-/* Same window, flipped over the chat — the gear toggles settings, settings
-   toggles debug. Both cover the chat fully (Ribbit-style view switch). */
-.panel {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  background: var(--bg);
-  border-radius: var(--radius);
+/* Views (settings, debug) -------------------------------------------- */
+/* The titlebar above stays put; these replace the chat body in place (the gear
+   flips chat ↔ settings — Ribbit-style). A flex child, not an overlay, so the
+   gear is never covered. */
+.view-panel {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0.5rem 0.7rem 0.7rem;
+  overflow-y: auto;
+  padding: 0.1rem 0.8rem 0.7rem;
 }
-#debug-panel { z-index: 20; }   /* debug sits above settings */
 
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  flex-shrink: 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-  padding: 0.15rem 0.1rem 0.45rem;
-}
-.panel-title { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
-.panel-title > span:first-child { color: var(--text); font-weight: 600; }
-
-/* Transient status next to the settings title; empty (hidden) at rest. */
+/* Transient status under the wordmark in the titlebar; hidden at rest. */
 .status-detail {
   font-size: 0.7rem;
   color: var(--muted);
@@ -286,14 +274,19 @@ body {
 .status-detail.done { color: var(--good); }
 .status-detail.error { color: #fca5a5; }
 
-/* Settings rows ------------------------------------------------------- */
-.settings-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+/* Debug view header (its own back button; the gear returns to chat). */
+.panel-head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 0.2rem 0 0.45rem;
 }
+.debug-view { padding-bottom: 0.6rem; }
+
+/* Settings rows ------------------------------------------------------- */
 .setting-row {
   display: flex;
   align-items: center;
@@ -377,9 +370,9 @@ kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(16
   50% { color: #22c55e; }
 }
 
-.settings-body::-webkit-scrollbar { width: 6px; }
-.settings-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-.settings-body::-webkit-scrollbar-thumb:hover { background: #2f3947; }
+.view-panel::-webkit-scrollbar { width: 6px; }
+.view-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.view-panel::-webkit-scrollbar-thumb:hover { background: #2f3947; }
 
 /* Debug log content */
 #debug-content {

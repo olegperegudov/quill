@@ -15,8 +15,10 @@ const { listen } = window.__TAURI__.event;
 const $ = (sel) => document.querySelector(sel);
 const log = $("#log");
 const input = $("#input");
+const composer = $("#composer");
 const settingsPanel = $("#settings-panel");
 const debugPanel = $("#debug-panel");
+const settingsBtn = $("#settings-btn");
 
 // Diagnostics without DevTools (disabled in prod) — goes to the shared debug log.
 function dlog(msg) {
@@ -167,28 +169,42 @@ input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
-// --- Window controls + settings overlay ---
+// --- Views (Ribbit-style: one window, the titlebar stays, the body swaps) ---
 
-// The gear flips the settings panel over the chat (Ribbit-style: one window,
-// two views), instead of opening a second window.
-function toggleSettings(force) {
-  const open = force ?? settingsPanel.style.display === "none";
-  settingsPanel.style.display = open ? "flex" : "none";
+// "chat" | "settings" | "debug". The titlebar — and so the gear — is always
+// visible, so the gear toggles chat ↔ settings from either side.
+let currentView = "chat";
+function setView(name) {
+  currentView = name;
+  const chat = name === "chat";
+  log.style.display = chat ? "" : "none";
+  composer.style.display = chat ? "" : "none";
+  settingsPanel.style.display = name === "settings" ? "flex" : "none";
+  debugPanel.style.display = name === "debug" ? "flex" : "none";
+  settingsBtn.classList.toggle("active", !chat); // gear shows it's "in settings"
+  if (chat) { scrollToBottom(); input.focus(); }
 }
 
-$("#settings-btn").addEventListener("click", () => toggleSettings());
-$("#settings-close").addEventListener("click", () => toggleSettings(false));
+// The gear flips between the chat and settings (from debug it returns to chat).
+settingsBtn.addEventListener("click", () => setView(currentView === "chat" ? "settings" : "chat"));
 $("#close").addEventListener("click", () => invoke("close_editor"));
 
-// Esc peels back one layer at a time: debug → settings → hide the window. While
-// a shortcut capture is live, settings.js owns Esc (cancels the capture), so we
-// defer to it via the `.capturing` class it sets.
+// Debug log is reached from settings and steps back to it.
+$("#debug-btn").addEventListener("click", async () => {
+  $("#debug-content").textContent = await invoke("get_debug_log");
+  setView("debug");
+});
+$("#debug-close").addEventListener("click", () => setView("settings"));
+
+// Esc peels back one layer: debug → settings → chat → hide the window. While a
+// shortcut capture is live, settings.js owns Esc (cancels it), so we defer via
+// the `.capturing` class it sets on the kbd.
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if ($("#shortcut-display")?.classList.contains("capturing")) return;
   e.preventDefault();
-  if (debugPanel.style.display !== "none") { debugPanel.style.display = "none"; return; }
-  if (settingsPanel.style.display !== "none") { toggleSettings(false); return; }
+  if (currentView === "debug") return setView("settings");
+  if (currentView === "settings") return setView("chat");
   invoke("close_editor");
 });
 
@@ -221,14 +237,14 @@ listen("update-available", () => {
   gear.title = "Доступно обновление — открой настройки";
 });
 
-// Bring up history + wire the settings overlay. On first run (no API key yet),
-// open settings straight away so the window the tray/hotkey reveals isn't a
-// dead end — Rust shows this window on a keyless launch.
+// Bring up history + wire settings. On first run (no API key yet) land on the
+// settings view so the window the tray/hotkey reveals isn't a dead end — Rust
+// shows this window on a keyless launch.
 async function boot() {
   loadHistory();
   try {
     const cfg = await initSettings();
-    if (cfg && !cfg.has_api_key) toggleSettings(true);
+    if (cfg && !cfg.has_api_key) setView("settings");
   } catch (err) {
     dlog(`initSettings failed: ${err}`);
   }

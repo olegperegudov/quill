@@ -3,6 +3,31 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.19 — gear always reachable: titlebar stays, the body swaps views
+
+**What was wrong.** 0.1.18 made settings a full-cover overlay (`position:absolute;
+inset:0`), which painted over the titlebar too — so once in settings the gear was
+gone and there was no way to flip back to the chat/log. (Also two minor CI/build
+follow-ups landed as 0.1.18.x.)
+
+**The fix — Ribbit's real structure.** The titlebar is now persistent; only the
+body below it swaps between three views:
+- `setView("chat"|"settings"|"debug")` toggles `#log`+`#composer` vs
+  `#settings-panel` vs `#debug-panel` (each a `.view-panel` flex child, not an
+  overlay). The gear lives in the always-visible titlebar, so it flips chat ↔
+  settings from either side; it shows an `.active` tint while in settings.
+- **Status moved into the titlebar** (under the wordmark), so "Ключ сохранён" /
+  "Hotkey: …" is visible from any view.
+- Debug log is a third view reached from settings (`>_`) with its own back; Esc
+  peels debug → settings → chat → hide window. Capture still owns Esc via
+  `.capturing`.
+- View switching consolidated in editor.js; settings.js no longer touches the
+  debug panel. No second window, no overlay covering the chrome.
+
+Verified headless: the gear is visible in chat, settings, AND debug; the log
+hides in settings; the gear toggles back to chat; Esc peels each layer. `vitest`
+7/7, no console errors.
+
 ## 0.1.18 — one window: the gear flips settings over the chat, no second window
 
 **What was wrong.** 0.1.17 made the chat the app's face but kept settings as a
