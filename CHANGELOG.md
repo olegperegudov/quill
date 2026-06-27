@@ -3,6 +3,54 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.21 — stable self-signed signing (Accessibility grant survives updates), normal window
+
+**Three reports.** (1) The window floated above every other window — couldn't be
+sent behind. (2) After an update the selection wasn't captured: the chat opened
+empty and the user had to paste by hand. (3) The VPN still dropped on the 0.1.20
+update.
+
+**0.1.20's keychain theory was wrong — corrected here.** The debug log after the
+0.1.20 update shows *no* `loaded … from keychain` line (the new file-based build
+never touched the keychain) yet the VPN dropped anyway → keychain wasn't the
+cause. `tccutil` is ruled out too: Ribbit's `tcc_reset.rs` is byte-identical and
+its log resets TCC on every update, but Ribbit's VPN never drops. So both prior
+suspects are eliminated by evidence. (Keychain→file from 0.1.20 stays — it does
+kill the post-update password prompt — it just wasn't the VPN trigger.)
+
+**Real root cause (capture + the VPN's last lead): ad-hoc signing.** Each ad-hoc
+release gets a fresh cdhash, and a TCC grant's designated requirement pins that
+cdhash. So after every update the Accessibility grant goes stale: System Settings
+still shows Quill "allowed", `AXIsProcessTrusted()` returns true, but the
+synthetic ⌘C is filtered at kCGHIDEventTap → `captured 0 chars`. The debug log
+(is_trusted true, 0 chars) and the screenshot (Quill toggled on) confirm it. This
+is also the **only** remaining Quill-vs-Ribbit difference for the VPN: Quill is
+the one that needs the most-privileged grant (Accessibility) re-issued every
+update; Ribbit only needs Microphone.
+
+**The fix — stable self-signed certificate.** CI now signs both macOS arches with
+a self-signed code-signing cert (secrets `APPLE_CERTIFICATE` /
+`APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`, imported by
+tauri-action). The designated requirement then anchors to the **certificate**
+(`identifier "com.quill.app" and certificate root = H"…"`), not the cdhash — so
+the Accessibility grant survives every update and the selection capture keeps
+working. Not notarized (no Apple account), so first launch still needs a
+right-click→Open, exactly like the old ad-hoc builds.
+
+- `tcc_reset.rs` rekeyed off the **signing identity** instead of the cdhash: it
+  resets once on the ad-hoc→cert migration (clears the stale ad-hoc grant so the
+  user gets a clean prompt), then never again across cert-signed builds. Keying
+  off cdhash would have wiped the good grant on every release.
+- `selection.rs`: a 20 ms settle on each side of the ⌘ chord, so the OS doesn't
+  see a bare "c" (copy never fires) in fussy apps — terminals, Electron.
+- Window: `alwaysOnTop` false (was true). It opens at the cursor and takes focus
+  on the hotkey, but no longer floats above other windows. Matches Ribbit.
+
+One-time: the transition update re-grants Accessibility once (the old ad-hoc
+grant doesn't match the cert-signed binary); from then on it persists. Whether
+the VPN survives is verified on the update *after* this one (the first clean,
+cert-to-cert update).
+
 ## 0.1.20 — store the API key in a file, not the macOS Keychain
 
 **The symptom.** Every Quill update (a) re-prompted for the macOS login password

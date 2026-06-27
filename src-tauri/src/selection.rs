@@ -77,9 +77,14 @@ fn send_copy() -> Result<(), String> {
     enigo
         .key(COPY_MODIFIER, Direction::Press)
         .map_err(|e| format!("modifier press: {}", e))?;
+    // Let ⌘ register before C lands, and hold the chord a beat before releasing.
+    // Without these the OS can see a bare "c" (copy never fires) — the difference
+    // between a 0-char capture and a real one in fussy apps (terminals, Electron).
+    std::thread::sleep(std::time::Duration::from_millis(20));
     enigo
         .key(COPY_KEY, Direction::Click)
         .map_err(|e| format!("c click: {}", e))?;
+    std::thread::sleep(std::time::Duration::from_millis(20));
     enigo
         .key(COPY_MODIFIER, Direction::Release)
         .map_err(|e| format!("modifier release: {}", e))?;
