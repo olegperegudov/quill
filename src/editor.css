@@ -1,7 +1,8 @@
-/* Quill chat window — the hotkey surface.
-   Same visual language as the settings window (styles.css): dark slate base,
-   ink-violet accent, system-sans. Self-contained so the page loads on its own;
-   the token block is a deliberate copy of styles.css :root. */
+/* Quill — the one window. The chat is the hotkey surface; settings and the
+   debug log are overlays flipped over it by the gear (.panel, below).
+   Visual language (greenfield, set here): dark slate base shared with the
+   Ribbit family, a softer system-sans for a "writing" feel, and an ink-violet
+   accent that's distinctly Quill, not Ribbit's green. */
 
 :root {
   --bg: #0f1318;
@@ -29,6 +30,7 @@ body {
 }
 
 .chat {
+  position: relative;            /* anchor for the settings/debug overlays */
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -242,3 +244,156 @@ body {
   transition: background 0.12s;
 }
 .send:hover { background: #b89dfb; }
+
+/* Overlays (settings, debug) ----------------------------------------- */
+/* Same window, flipped over the chat — the gear toggles settings, settings
+   toggles debug. Both cover the chat fully (Ribbit-style view switch). */
+.panel {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.7rem 0.7rem;
+}
+#debug-panel { z-index: 20; }   /* debug sits above settings */
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  padding: 0.15rem 0.1rem 0.45rem;
+}
+.panel-title { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
+.panel-title > span:first-child { color: var(--text); font-weight: 600; }
+
+/* Transient status next to the settings title; empty (hidden) at rest. */
+.status-detail {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-detail:empty { display: none; }
+.status-detail.working { color: var(--ink); }
+.status-detail.done { color: var(--good); }
+.status-detail.error { color: #fca5a5; }
+
+/* Settings rows ------------------------------------------------------- */
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.1rem;
+  border-bottom: 1px solid var(--line);
+}
+.setting-label { font-size: 0.82rem; color: var(--muted); flex-shrink: 0; }
+#version { color: var(--muted); }
+
+select, input[type="password"], input[type="text"] {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  max-width: 60%;
+}
+select { cursor: pointer; min-width: 9rem; }
+input:focus, select:focus { border-color: var(--ink-dim); }
+input::placeholder { color: #4d5663; }
+.key-field { display: flex; align-items: center; justify-content: flex-end; flex: 1; }
+.key-field input { flex: 1; max-width: none; }
+.saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.saved .check { color: var(--good); }
+.link { color: var(--ink); cursor: pointer; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.settings-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.7;
+  padding: 0.6rem 0.1rem;
+}
+
+kbd {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.76rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0.1rem 0.4rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+kbd:hover { border-color: var(--ink-dim); color: var(--ink); }
+kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(167,139,250,0.1); }
+
+/* Ghost buttons (debug, update) — update glows green when armed. */
+.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.ghost:hover { border-color: var(--ink-dim); color: var(--text); }
+.ghost:disabled { opacity: 0.5; cursor: default; }
+.ghost.update-available {
+  color: var(--good);
+  border-color: rgba(74, 222, 128, 0.5);
+  animation: update-pulse 2s ease-in-out infinite;
+}
+@keyframes update-pulse {
+  0%, 100% { color: var(--good); }
+  50% { color: #22c55e; }
+}
+
+.settings-body::-webkit-scrollbar { width: 6px; }
+.settings-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.settings-body::-webkit-scrollbar-thumb:hover { background: #2f3947; }
+
+/* Debug log content */
+#debug-content {
+  flex: 1;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.5rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}

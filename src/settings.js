@@ -1,15 +1,15 @@
-//! Quill settings window.
+//! Quill settings — an in-window overlay, not a separate window.
 //!
-//! The product is the chat (editor.js) — that's what the hotkey and the tray
-//! open. This window is just its settings: model, API key, hotkey, updates,
-//! debug log. It stays in the tray until you open it from the chat's gear (or
-//! first-run, when there's no API key yet).
+//! The app has one face: the chat (editor.js). The gear in its titlebar flips
+//! this panel over the chat (Ribbit-style), the way Ribbit's gear swaps its log
+//! for settings — nothing opens a second window. This module owns what lives
+//! *inside* the panel (model, API key, hotkey, updates, debug log) and reports
+//! transient status in the panel header. editor.js owns showing/hiding it.
 
 import { shortcutFromEvent, prettyShortcut } from "./shortcut.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
-const { getCurrentWindow } = window.__TAURI__.window;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -18,21 +18,21 @@ const $ = (sel) => document.querySelector(sel);
 const IS_MAC = navigator.userAgent.includes("Mac");
 const pretty = (raw) => prettyShortcut(raw, IS_MAC);
 
-// Diagnostics without DevTools (disabled in prod builds): goes to the debug log.
 function dlog(msg) {
   try { invoke("js_debug_log", { msg: String(msg) }); } catch (_) {}
 }
 
-// --- Live status (header subtitle, empty at rest) ---
+// --- Live status (settings header subtitle, empty at rest) ---
 
 let statusResetTimer = null;
 function setStatus(text, kind = "idle") {
   const el = $("#status-detail");
+  if (!el) return;
   el.className = `status-detail ${kind}`;
   el.textContent = text || "";
   clearTimeout(statusResetTimer);
   // Anything that isn't an in-flight "working" state is transient — clear it so
-  // the header settles back to just the title (the empty subtitle hides itself).
+  // the header settles back to just "Настройки".
   if (text && kind !== "working") {
     statusResetTimer = setTimeout(() => {
       el.textContent = "";
@@ -82,9 +82,11 @@ function setupShortcutCapture() {
     if (capturing) return;
     capturing = true;
     disp.classList.add("capturing");
-    disp.textContent = "press keys…";
+    disp.textContent = "нажми клавиши…";
   });
 
+  // The `.capturing` class is the shared signal: editor.js checks it so its Esc
+  // handler defers to us (Esc here cancels capture instead of closing settings).
   window.addEventListener("keydown", async (e) => {
     if (!capturing) return;
     e.preventDefault();
@@ -95,7 +97,7 @@ function setupShortcutCapture() {
       return;
     }
     const { parts, complete } = shortcutFromEvent(e);
-    disp.textContent = parts.length ? pretty(parts.join("+")) : "press keys…";
+    disp.textContent = parts.length ? pretty(parts.join("+")) : "нажми клавиши…";
     if (!complete) return;
 
     const shortcut = parts.join("+");
@@ -104,10 +106,10 @@ function setupShortcutCapture() {
     try {
       await invoke("set_shortcut", { shortcut });
       disp.textContent = pretty(shortcut);
-      setStatus(`Hotkey set to ${pretty(shortcut)}`, "done");
+      setStatus(`Hotkey: ${pretty(shortcut)}`, "done");
     } catch (err) {
       disp.textContent = pretty(await invoke("get_shortcut"));
-      setStatus(`Couldn't set hotkey: ${err}`, "error");
+      setStatus(`Не вышло задать hotkey: ${err}`, "error");
     }
   });
 }
@@ -143,7 +145,7 @@ async function setupUpdates() {
       else { btn.textContent = "up to date"; setTimeout(setIdle, 2500); }
     } catch (err) {
       btn.textContent = "check failed";
-      setStatus(`Update check failed: ${err}`, "error");
+      setStatus(`Проверка обновления не удалась: ${err}`, "error");
       setTimeout(setIdle, 2500);
     }
   }
@@ -167,19 +169,16 @@ async function setupUpdates() {
   await listen("update-progress", (e) => { btn.textContent = `downloading ${e.payload}%`; });
 }
 
-// --- Wiring ---
+// --- Init (called once by editor.js when the window loads) ---
 
-async function main() {
-  $("#win-min").addEventListener("click", () => getCurrentWindow().minimize());
-  $("#win-close").addEventListener("click", () => invoke("hide_to_tray"));
-
+export async function initSettings() {
   // Provider switch
   $("#provider-select").addEventListener("change", async (e) => {
     const provider = e.target.value;
     try {
       await invoke("set_llm_provider", { provider });
       await refreshConfig();
-    } catch (err) { setStatus(`Couldn't switch model: ${err}`, "error"); }
+    } catch (err) { setStatus(`Не вышло сменить модель: ${err}`, "error"); }
   });
 
   // API key save
@@ -191,8 +190,8 @@ async function main() {
     try {
       await invoke("set_api_key", { key, provider });
       await refreshConfig();
-      setStatus("Key saved", "done");
-    } catch (err) { setStatus(`Couldn't save key: ${err}`, "error"); }
+      setStatus("Ключ сохранён", "done");
+    } catch (err) { setStatus(`Не вышло сохранить ключ: ${err}`, "error"); }
   }
   keyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveKey(); });
   keyInput.addEventListener("blur", saveKey);
@@ -202,33 +201,17 @@ async function main() {
     keyInput.focus();
   });
 
-  // Debug panel
+  // Debug panel (overlay above settings)
   $("#debug-btn").addEventListener("click", async () => {
     $("#debug-content").textContent = await invoke("get_debug_log");
     $("#debug-panel").style.display = "flex";
   });
   $("#debug-close").addEventListener("click", () => { $("#debug-panel").style.display = "none"; });
 
-  // Live status from the correction flow (when settings is open during one).
-  await listen("status", (e) => {
-    const t = e.payload;
-    const kind = t.includes("✓") ? "done" : "working";
-    setStatus(t, kind);
-  });
-  await listen("error", (e) => setStatus(e.payload, "error"));
-  // Opened from the chat's gear — nothing to switch to, settings is all there is.
-  await listen("show-settings", () => getCurrentWindow().setFocus());
-
   // Initial state
   const cfg = await refreshConfig();
-  const shortcut = pretty(await invoke("get_shortcut"));
-  $("#shortcut-display").textContent = shortcut;
+  $("#shortcut-display").textContent = pretty(await invoke("get_shortcut"));
   setupShortcutCapture();
   await setupUpdates();
-  if (!cfg.has_api_key) {
-    setStatus("Add an API key", "working");
-    keyInput.focus();
-  }
+  return cfg;
 }
-
-main().catch((err) => dlog(`main() failed: ${err}`));

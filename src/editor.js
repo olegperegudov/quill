@@ -7,12 +7,16 @@
 //! or paste a fresh message — Enter sends it through the same correct→reply path,
 //! so re-polishing is just: click your bubble (copies), paste, tweak, Enter.
 
+import { initSettings } from "./settings.js";
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 const $ = (sel) => document.querySelector(sel);
 const log = $("#log");
 const input = $("#input");
+const settingsPanel = $("#settings-panel");
+const debugPanel = $("#debug-panel");
 
 // Diagnostics without DevTools (disabled in prod) — goes to the shared debug log.
 function dlog(msg) {
@@ -163,12 +167,29 @@ input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
 
-// --- Window controls ---
+// --- Window controls + settings overlay ---
 
-$("#settings-btn").addEventListener("click", () => invoke("show_main_window"));
+// The gear flips the settings panel over the chat (Ribbit-style: one window,
+// two views), instead of opening a second window.
+function toggleSettings(force) {
+  const open = force ?? settingsPanel.style.display === "none";
+  settingsPanel.style.display = open ? "flex" : "none";
+}
+
+$("#settings-btn").addEventListener("click", () => toggleSettings());
+$("#settings-close").addEventListener("click", () => toggleSettings(false));
 $("#close").addEventListener("click", () => invoke("close_editor"));
+
+// Esc peels back one layer at a time: debug → settings → hide the window. While
+// a shortcut capture is live, settings.js owns Esc (cancels the capture), so we
+// defer to it via the `.capturing` class it sets.
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { e.preventDefault(); invoke("close_editor"); }
+  if (e.key !== "Escape") return;
+  if ($("#shortcut-display")?.classList.contains("capturing")) return;
+  e.preventDefault();
+  if (debugPanel.style.display !== "none") { debugPanel.style.display = "none"; return; }
+  if (settingsPanel.style.display !== "none") { toggleSettings(false); return; }
+  invoke("close_editor");
 });
 
 // --- Events from Rust ---
@@ -200,5 +221,18 @@ listen("update-available", () => {
   gear.title = "Доступно обновление — открой настройки";
 });
 
-loadHistory();
+// Bring up history + wire the settings overlay. On first run (no API key yet),
+// open settings straight away so the window the tray/hotkey reveals isn't a
+// dead end — Rust shows this window on a keyless launch.
+async function boot() {
+  loadHistory();
+  try {
+    const cfg = await initSettings();
+    if (cfg && !cfg.has_api_key) toggleSettings(true);
+  } catch (err) {
+    dlog(`initSettings failed: ${err}`);
+  }
+}
+
+boot();
 dlog("chat window ready");

@@ -3,6 +3,37 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.18 — one window: the gear flips settings over the chat, no second window
+
+**What was wrong.** 0.1.17 made the chat the app's face but kept settings as a
+*separate* window — so clicking the gear opened a second window. The user wanted
+one window that switches between the chat (text + history) and settings, exactly
+like Ribbit (its gear swaps the log view for a settings view in place).
+
+**The fix — settings is an in-window overlay.**
+- The gear now flips a `#settings-panel` overlay over the chat (and a `>_` debug
+  overlay above that), the same way the chat already overlaid its debug log.
+  `showView`-style toggling, one window — mirrors Ribbit's gear behaviour.
+- **Esc peels back one layer**: debug → settings → hide the window. While a
+  shortcut capture is live, settings.js owns Esc (cancels capture) — editor.js
+  defers via the `.capturing` class on the kbd.
+- The settings **window is gone**. Removed the `main` window from
+  `tauri.conf.json`; the chat (`editor`) is the only window, sized 420×580 to
+  fit both views. Rounded-corners / Spaces polish now applies to it alone.
+- **Frontend consolidated.** Settings logic moved out of the deleted
+  `main.js`/`index.html`/`styles.css` into a new `settings.js` module
+  (`initSettings()`), imported by `editor.js`; its styles ported into
+  `editor.css` as `.panel` overlays. `shortcut.js` is shared by both.
+- **Backend trimmed.** Removed the now-dead commands `show_main_window`,
+  `hide_to_tray`, `show_from_tray`, `set_always_on_top` and the `show-settings`
+  event. First-run onboarding reveals the chat window; editor.js sees the
+  missing API key and opens the settings overlay itself (no cross-window event).
+
+Verified: `cargo check` clean (only pre-existing cocoa deprecation warnings);
+`vitest` 7/7 green; headless render of both views (chat with day-separated
+history + settings overlay) — one window, gear toggles, Esc peels layers, no
+console errors.
+
 ## 0.1.17 — the chat is the only face; the old clock-log window is gone
 
 **The regression it fixes.** Every update restarts the app, and on launch the

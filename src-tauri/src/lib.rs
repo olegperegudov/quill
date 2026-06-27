@@ -2,8 +2,8 @@
 //!
 //! Select text in any app, press the global hotkey, and Quill sends the
 //! selection to an LLM that fixes spelling/punctuation/grammar (RU + EN,
-//! without changing meaning or tone) and types the corrected text back over
-//! the selection.
+//! without changing meaning or tone) and shows the result in a chat at the
+//! cursor; you click a bubble to copy it and paste it yourself.
 //!
 //! Where the pieces live:
 //! - selection.rs — grab the current selection (synthetic Copy + clipboard)
@@ -11,10 +11,10 @@
 //! - logger.rs    — local history of corrections (original → corrected)
 //! - secrets.rs   — API key in the OS keychain
 //!
-//! The hotkey opens a chat window at the cursor showing your text and its
-//! correction; you click a bubble to copy the result and paste it yourself —
-//! Quill no longer types over the selection (which needed extra Accessibility
-//! reach and broke on every update). Capture still uses a synthetic Copy.
+//! One window, the chat (src/editor.{html,js}); its settings (model, key,
+//! hotkey, updates, debug) live behind the gear as an in-window overlay, not a
+//! second window. Copying the result instead of typing it back keeps the
+//! Accessibility reach to capture-only (the type-back grant broke every update).
 //!
 //! Forked from Ribbit (voice-to-text); the tray/updater/window/TCC plumbing is
 //! shared, the audio pipeline is replaced by the selection→correct→chat flow.
@@ -153,30 +153,6 @@ fn get_debug_log() -> String {
         }
         Err(_) => "No debug log found.".to_string(),
     }
-}
-
-#[tauri::command]
-fn hide_to_tray(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.hide();
-    }
-}
-
-#[tauri::command]
-fn show_from_tray(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
-}
-
-#[tauri::command]
-fn set_always_on_top(app: AppHandle, value: bool) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("main") {
-        w.set_always_on_top(value).map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -396,18 +372,6 @@ fn close_editor(app: AppHandle) {
     }
 }
 
-/// Open the settings window (the chat's gear). Lands straight on the settings
-/// view rather than the history, via the `show-settings` event.
-#[tauri::command]
-fn show_main_window(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-        let _ = app.emit("show-settings", ());
-    }
-}
-
 /// Is the app trusted for Accessibility right now? Backs the editor's "I've
 /// enabled it" retry button so it can confirm without guessing.
 #[tauri::command]
@@ -541,16 +505,12 @@ pub fn run() {
             js_debug_log,
             get_shortcut,
             set_shortcut,
-            hide_to_tray,
-            show_from_tray,
-            set_always_on_top,
             check_for_update,
             install_update,
             get_current_version,
             editor_correct,
             copy_to_clipboard,
             close_editor,
-            show_main_window,
             accessibility_status,
             open_accessibility_settings
         ])
@@ -593,15 +553,13 @@ pub fn run() {
             let _tray = tray_builder.build(app)?;
 
             // macOS-only window polish: rounded corners + follow active Space.
-            // Both windows are borderless+transparent, so both need it.
-            for label in ["main", "editor"] {
-                if let Some(win) = app.get_webview_window(label) {
-                    if let Err(e) = mac_window::apply_rounded_corners(&win, 10.0) {
-                        debug_log::log(&format!("rounded corners [{}]: {}", label, e));
-                    }
-                    if let Err(e) = mac_window::apply_spaces_behavior(&win) {
-                        debug_log::log(&format!("spaces behavior [{}]: {}", label, e));
-                    }
+            // One window now — the chat (borderless + transparent).
+            if let Some(win) = app.get_webview_window("editor") {
+                if let Err(e) = mac_window::apply_rounded_corners(&win, 10.0) {
+                    debug_log::log(&format!("rounded corners: {}", e));
+                }
+                if let Err(e) = mac_window::apply_spaces_behavior(&win) {
+                    debug_log::log(&format!("spaces behavior: {}", e));
                 }
             }
 
@@ -617,8 +575,9 @@ pub fn run() {
 
             // Tray app: launch into the tray, no window in your face — important
             // because every update restarts the app. The one exception is
-            // first-run with no API key: pop settings so the hotkey isn't a dead
-            // end. Both windows are visible:false in tauri.conf.
+            // first-run with no API key: reveal the chat (visible:false in
+            // tauri.conf) so the hotkey isn't a dead end; editor.js sees the
+            // missing key and opens the settings overlay itself.
             let cfg = read_config();
             let provider_name = cfg["llm_provider"]
                 .as_str()
@@ -626,10 +585,9 @@ pub fn run() {
             let active = corrector::find_provider(provider_name)
                 .unwrap_or_else(|| corrector::find_provider(corrector::DEFAULT_PROVIDER).unwrap());
             if !secrets::has_key(active.env_var) {
-                if let Some(w) = app.get_webview_window("main") {
+                if let Some(w) = app.get_webview_window("editor") {
                     let _ = w.show();
                     let _ = w.set_focus();
-                    let _ = handle.emit("show-settings", ());
                 }
             }
 

@@ -1,4 +1,4 @@
-//! Pure shortcut helpers, kept out of main.js so they unit-test without a DOM:
+//! Pure shortcut helpers, kept out of settings.js so they unit-test without a DOM:
 //! - shortcutFromEvent: a keydown event → Tauri shortcut string ("ctrl+alt+e")
 //! - prettyShortcut: that stored string → a platform-correct label (⌃⌥E on Mac,
 //!   "Ctrl + Alt + E" on Windows)
