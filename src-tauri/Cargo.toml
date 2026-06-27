@@ -26,8 +26,6 @@ reqwest = { version = "0.12", features = ["json", "blocking"] }
 enigo = "0.2"
 # Read the selection out of the clipboard during capture (then restore it).
 arboard = "3"
-# API key in the OS keychain instead of a plaintext file.
-keyring = { version = "3", features = ["apple-native", "windows-native"] }
 chrono = "0.4"
 dirs = "6"
 tauri-plugin-updater = "2"

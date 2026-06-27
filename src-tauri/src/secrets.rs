@@ -1,63 +1,96 @@
-//! API-key storage in the OS keychain (macOS Keychain / Windows Credential
-//! Manager) instead of a plaintext file.
+//! API-key storage in a local config file (config_dir/quill/.env), owner-only.
 //!
-//! Rationale (CLAUDE.md secrets policy): the key is a real credential, so it
-//! lives in the OS secret store, not on disk in cleartext. The rest of the code
-//! is unchanged: at startup we load any stored keys into the process env, and
-//! `corrector.rs` keeps reading them via `std::env::var(provider.env_var)`.
+//! Why a file and not the OS keychain: an ad-hoc-signed Tauri app gets a fresh
+//! code signature every release, and a macOS Keychain ACL is anchored to that
+//! signature. So after each update macOS re-prompts for the login password to
+//! re-authorize keychain access — and that post-update keychain re-authorization
+//! was disturbing other keychain-backed sessions on the machine (it lined up
+//! exactly with a corporate VPN dropping on every Quill update). A plain file
+//! never touches the keychain, which is how Ribbit (the upstream app) has always
+//! stored its key. An API key can't be hashed (it's sent to the provider as-is),
+//! so the realistic choice is keychain vs file; the file is the user's own
+//! credential on their own machine, written 0600 (owner read/write only).
 //!
-//! Caveat (documented for the project owner): an ad-hoc-signed Tauri app gets a
-//! fresh code signature each release, and the keychain ACL is anchored to it —
-//! so after an update macOS may re-prompt once for keychain access. Same class
-//! of one-prompt-per-release friction as the TCC reset (see tcc_reset.rs). If
-//! that ever becomes annoying, the storage backend is the only thing that has
-//! to change.
+//! Public API is unchanged: at startup we load any stored keys into the process
+//! env, and corrector.rs keeps reading them via std::env::var(provider.env_var).
 
 use crate::corrector::PROVIDERS;
 use crate::debug_log;
+use std::path::{Path, PathBuf};
 
-const SERVICE: &str = "quill";
+fn env_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join("quill").join(".env"))
+}
 
-fn entry(env_var: &str) -> Result<keyring::Entry, String> {
-    keyring::Entry::new(SERVICE, env_var).map_err(|e| e.to_string())
+fn read_file() -> String {
+    env_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_default()
+}
+
+/// Value stored for `env_var` in the .env file, if any.
+fn from_file(env_var: &str) -> Option<String> {
+    let prefix = format!("{}=", env_var);
+    read_file()
+        .lines()
+        .find_map(|l| l.strip_prefix(&prefix).map(str::to_string))
 }
 
 /// Pull every stored provider key into the process environment. Called once at
 /// startup so the corrector can read keys the usual way.
 pub fn load_into_env() {
     for p in PROVIDERS {
-        // Respect an already-exported env var (dev override) over the keychain.
-        if std::env::var(p.env_var).is_ok() {
+        // Respect an already-exported env var (dev override) over the file.
+        if std::env::var(p.env_var).map(|k| !k.is_empty()).unwrap_or(false) {
             continue;
         }
-        if let Ok(e) = entry(p.env_var) {
-            if let Ok(key) = e.get_password() {
-                if !key.is_empty() {
-                    unsafe { std::env::set_var(p.env_var, &key) };
-                    debug_log::log(&format!("loaded {} from keychain", p.env_var));
-                }
+        if let Some(key) = from_file(p.env_var) {
+            if !key.is_empty() {
+                unsafe { std::env::set_var(p.env_var, &key) };
+                debug_log::log(&format!("loaded {} from config", p.env_var));
             }
         }
     }
 }
 
-/// Store a key in the keychain and make it live in the current process.
+/// Store a key in the config file and make it live in the current process.
 pub fn save(env_var: &str, key: &str) -> Result<(), String> {
-    entry(env_var)?
-        .set_password(key)
-        .map_err(|e| e.to_string())?;
+    let path = env_path().ok_or("Cannot find config directory")?;
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+
+    // Rewrite, replacing only this var's line; keep the rest untouched.
+    let prefix = format!("{}=", env_var);
+    let mut lines: Vec<String> = read_file()
+        .lines()
+        .filter(|l| !l.starts_with(&prefix) && !l.trim().is_empty())
+        .map(str::to_string)
+        .collect();
+    lines.push(format!("{}={}", env_var, key));
+    write_private(&path, &(lines.join("\n") + "\n"))?;
+
     unsafe { std::env::set_var(env_var, key) };
-    debug_log::log(&format!("saved {} to keychain", env_var));
+    debug_log::log(&format!("saved {} to config", env_var));
     Ok(())
 }
 
-/// Whether a usable key for this env var is present (process env or keychain).
+/// Whether a usable key for this env var is present (process env or file).
 pub fn has_key(env_var: &str) -> bool {
     if std::env::var(env_var).map(|k| !k.is_empty()).unwrap_or(false) {
         return true;
     }
-    entry(env_var)
-        .and_then(|e| e.get_password().map_err(|err| err.to_string()))
-        .map(|k| !k.is_empty())
-        .unwrap_or(false)
+    from_file(env_var).map(|k| !k.is_empty()).unwrap_or(false)
+}
+
+/// Write the file owner-only (0600) so the token isn't readable by other users.
+#[cfg(unix)]
+fn write_private(path: &Path, body: &str) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, body).map_err(|e| e.to_string())?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(not(unix))]
+fn write_private(path: &Path, body: &str) -> Result<(), String> {
+    std::fs::write(path, body).map_err(|e| e.to_string())
 }

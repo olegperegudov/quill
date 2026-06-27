@@ -3,6 +3,40 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.20 — store the API key in a file, not the macOS Keychain
+
+**The symptom.** Every Quill update (a) re-prompted for the macOS login password
+and (b) dropped the user's corporate VPN (the 2FA-push one). A plain relaunch of
+the *same* binary did neither; running `tccutil reset All com.quill.app` by hand
+did neither. So the trigger was something Quill does **only on update** that
+Ribbit — same updater, same ad-hoc per-arch signing, VPN never drops — does not.
+
+**The difference, found by diffing the two apps.** Build/signing/Info.plist/
+updater/restart are byte-identical between Quill and Ribbit (so stable signing
+was a dead end — Ribbit isn't stably signed either). The one functional
+divergence: **Quill kept the API key in the macOS Keychain (`keyring` crate);
+Ribbit keeps it in a config file.** An ad-hoc binary's signature rotates each
+release, and a Keychain ACL is anchored to that signature — so the first launch
+after an update hits an ACL **mismatch** and macOS does a heavier "signature
+changed, re-authorize" pass on the login keychain. That lines up exactly with
+both the password prompt and the VPN (whose 2FA session lives in the same login
+keychain) dropping on every update.
+
+**The fix (Ribbit's approach).** Store the key in `config_dir/quill/.env`,
+written `0600`. Dropped the `keyring` dependency; `secrets.rs` now reads/writes
+that file with the same public API (`load_into_env` / `save` / `has_key`), so
+lib.rs callers are unchanged. An API key can't be hashed (it's sent to the
+provider verbatim), so the realistic choice is keychain-vs-file; the file is the
+user's own credential on their own machine, owner-only. Quill never touches the
+keychain now.
+
+One-time: the existing key sits in the old Keychain entry the new build no longer
+reads, so the key must be re-entered once after updating. Also fixed a stale
+capability referencing the removed `main` window.
+
+Confirmation pending: the password prompt is gone for certain; whether the VPN
+now survives an update is verified on the next update.
+
 ## 0.1.19 — gear always reachable: titlebar stays, the body swaps views
 
 **What was wrong.** 0.1.18 made settings a full-cover overlay (`position:absolute;

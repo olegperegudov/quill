@@ -9,7 +9,7 @@
 //! - selection.rs — grab the current selection (synthetic Copy + clipboard)
 //! - corrector.rs — call the LLM, return corrected text
 //! - logger.rs    — local history of corrections (original → corrected)
-//! - secrets.rs   — API key in the OS keychain
+//! - secrets.rs   — API key in a local config file (0600)
 //!
 //! One window, the chat (src/editor.{html,js}); its settings (model, key,
 //! hotkey, updates, debug) live behind the gear as an in-window overlay, not a
@@ -56,7 +56,7 @@ fn get_config() -> Result<serde_json::Value, String> {
         .to_string();
 
     // Preview of the active provider's key, if it happens to be in the process
-    // env (it is once loaded from the keychain at startup).
+    // env (it is once loaded from the config file at startup).
     let active = corrector::find_provider(&provider_name)
         .unwrap_or_else(|| corrector::find_provider(corrector::DEFAULT_PROVIDER).unwrap());
     let key = std::env::var(active.env_var).unwrap_or_default();
@@ -391,7 +391,7 @@ fn open_accessibility_settings() {
 }
 
 /// On a dev machine where `~/membeme/system/secrets/routerai.key` exists, seed
-/// the RouterAI key into the keychain on first launch. Quiet no-op otherwise.
+/// the RouterAI key into the config file on first launch. Quiet no-op otherwise.
 fn bootstrap_routerai_key() {
     let Some(home) = dirs::home_dir() else { return };
     let src = home.join("membeme/system/secrets/routerai.key");
@@ -470,7 +470,7 @@ pub fn run() {
     logger::cleanup_old_logs(history_days());
     tcc_reset::ensure_permissions(BUNDLE_ID);
 
-    // API keys from the OS keychain into the process env (corrector reads env).
+    // API keys from the config file into the process env (corrector reads env).
     secrets::load_into_env();
     if std::env::var("ROUTERAI_API_KEY").is_err() {
         bootstrap_routerai_key();
