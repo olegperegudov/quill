@@ -60,7 +60,7 @@ function ensureDay(iso) {
   log.appendChild(sep);
 }
 
-// Copy a bubble's text and flash a brief "скопировано" on it.
+// Copy a bubble's text and flash a brief "copied" on it.
 async function copyBubble(bubble, text) {
   try {
     await invoke("copy_to_clipboard", { text });
@@ -82,13 +82,13 @@ function addMessage(role, text, { clean = false } = {}) {
   bubble.textContent = text;
 
   if (role !== "system") {
-    bubble.title = "нажми, чтобы скопировать";
+    bubble.title = "click to copy";
     bubble.addEventListener("click", () => copyBubble(bubble, text));
     if (clean) {
       bubble.classList.add("bubble--clean");
       const tag = document.createElement("span");
       tag.className = "clean-tag";
-      tag.textContent = "уже чисто";
+      tag.textContent = "already clean";
       msg.appendChild(bubble);
       msg.appendChild(tag);
       log.appendChild(msg);
@@ -224,8 +224,8 @@ listen("editor:need-access", () => {
   ensureDay();
   addMessage(
     "system",
-    "Нужен доступ в «Универсальный доступ», чтобы я видел выделенный текст. " +
-      "macOS уже спросил — включи Quill и нажми ⌃⌥E снова (настроить можно через ⚙)."
+    "I need Accessibility access to read the selected text. " +
+      "macOS already asked — enable Quill and press ⌃⌥E again (settings are behind ⚙)."
   );
 });
 
@@ -234,7 +234,7 @@ listen("editor:need-access", () => {
 listen("update-available", () => {
   const gear = $("#settings-btn");
   gear.classList.add("update-available");
-  gear.title = "Доступно обновление — открой настройки";
+  gear.title = "Update available — open settings";
 });
 
 // Bring up history + wire settings. On first run (no API key yet) land on the

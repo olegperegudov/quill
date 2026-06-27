@@ -128,10 +128,10 @@ body {
 .bubble:hover { filter: brightness(1.08); }
 .msg-bot .bubble:hover { box-shadow: 0 0 0 1px var(--ink-dim); }
 
-/* "click to copy" → "скопировано ✓" flash. */
+/* "click to copy" → "copied ✓" flash. */
 .bubble.copied { box-shadow: 0 0 0 1px var(--good); }
 .bubble.copied::after {
-  content: "скопировано ✓";
+  content: "copied ✓";
   position: absolute;
   bottom: calc(100% + 4px);
   right: 0;

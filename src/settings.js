@@ -32,7 +32,7 @@ function setStatus(text, kind = "idle") {
   el.textContent = text || "";
   clearTimeout(statusResetTimer);
   // Anything that isn't an in-flight "working" state is transient — clear it so
-  // the header settles back to just "Настройки".
+  // the header settles back to just "Settings".
   if (text && kind !== "working") {
     statusResetTimer = setTimeout(() => {
       el.textContent = "";
@@ -82,7 +82,7 @@ function setupShortcutCapture() {
     if (capturing) return;
     capturing = true;
     disp.classList.add("capturing");
-    disp.textContent = "нажми клавиши…";
+    disp.textContent = "press keys…";
   });
 
   // The `.capturing` class is the shared signal: editor.js checks it so its Esc
@@ -97,7 +97,7 @@ function setupShortcutCapture() {
       return;
     }
     const { parts, complete } = shortcutFromEvent(e);
-    disp.textContent = parts.length ? pretty(parts.join("+")) : "нажми клавиши…";
+    disp.textContent = parts.length ? pretty(parts.join("+")) : "press keys…";
     if (!complete) return;
 
     const shortcut = parts.join("+");
@@ -109,7 +109,7 @@ function setupShortcutCapture() {
       setStatus(`Hotkey: ${pretty(shortcut)}`, "done");
     } catch (err) {
       disp.textContent = pretty(await invoke("get_shortcut"));
-      setStatus(`Не вышло задать hotkey: ${err}`, "error");
+      setStatus(`Couldn't set hotkey: ${err}`, "error");
     }
   });
 }
@@ -145,7 +145,7 @@ async function setupUpdates() {
       else { btn.textContent = "up to date"; setTimeout(setIdle, 2500); }
     } catch (err) {
       btn.textContent = "check failed";
-      setStatus(`Проверка обновления не удалась: ${err}`, "error");
+      setStatus(`Update check failed: ${err}`, "error");
       setTimeout(setIdle, 2500);
     }
   }
@@ -178,7 +178,7 @@ export async function initSettings() {
     try {
       await invoke("set_llm_provider", { provider });
       await refreshConfig();
-    } catch (err) { setStatus(`Не вышло сменить модель: ${err}`, "error"); }
+    } catch (err) { setStatus(`Couldn't switch model: ${err}`, "error"); }
   });
 
   // API key save
@@ -190,8 +190,8 @@ export async function initSettings() {
     try {
       await invoke("set_api_key", { key, provider });
       await refreshConfig();
-      setStatus("Ключ сохранён", "done");
-    } catch (err) { setStatus(`Не вышло сохранить ключ: ${err}`, "error"); }
+      setStatus("Key saved", "done");
+    } catch (err) { setStatus(`Couldn't save key: ${err}`, "error"); }
   }
   keyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveKey(); });
   keyInput.addEventListener("blur", saveKey);

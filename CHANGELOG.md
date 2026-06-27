@@ -45,6 +45,10 @@ right-click→Open, exactly like the old ad-hoc builds.
   see a bare "c" (copy never fires) in fussy apps — terminals, Electron.
 - Window: `alwaysOnTop` false (was true). It opens at the cursor and takes focus
   on the hotkey, but no longer floats above other windows. Matches Ribbit.
+- UI is now all English (was mixed RU/EN): every label, placeholder, tooltip,
+  status line, and the one user-facing Rust error. Dropped the "history is local
+  only" settings note. Russian stays only in corrector.rs test fixtures (they
+  exercise the RU correction path) and in user-entered chat content.
 
 One-time: the transition update re-grants Accessibility once (the old ad-hoc
 grant doesn't match the cert-signed binary); from then on it persists. Whether

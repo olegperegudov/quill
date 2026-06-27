@@ -332,7 +332,7 @@ fn resolve_provider_and_key() -> Result<(&'static corrector::ProviderConfig, Str
         .unwrap_or_else(|| corrector::find_provider(corrector::DEFAULT_PROVIDER).unwrap());
     let key = std::env::var(provider.env_var).unwrap_or_default();
     if key.is_empty() {
-        return Err(format!("Нет ключа API для {} — открой настройки Quill.", provider.label));
+        return Err(format!("No API key for {} — open Quill settings.", provider.label));
     }
     Ok((provider, key))
 }

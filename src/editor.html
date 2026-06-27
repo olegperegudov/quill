@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="editor.css" />
@@ -20,8 +20,8 @@
           </div>
         </div>
         <div class="win-controls">
-          <button id="settings-btn" class="win-btn" title="Чат / настройки">&#x2699;</button>
-          <button id="close" class="win-btn win-close" title="Скрыть (Esc)">&#x2715;</button>
+          <button id="settings-btn" class="win-btn" title="Chat / settings">&#x2699;</button>
+          <button id="close" class="win-btn win-close" title="Hide (Esc)">&#x2715;</button>
         </div>
       </header>
 
@@ -30,8 +30,8 @@
       <div id="log" class="log"></div>
       <form id="composer" class="composer">
         <textarea id="input" rows="1" spellcheck="false"
-                  placeholder="Напиши или вставь текст…  Enter — отправить"></textarea>
-        <button id="send" class="send" type="submit" title="Отправить (Enter)" aria-label="Отправить">
+                  placeholder="Type or paste text…  Enter to send"></textarea>
+        <button id="send" class="send" type="submit" title="Send (Enter)" aria-label="Send">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3.5"/><path d="M3.8 7.2 8 3l4.2 4.2"/></svg>
         </button>
       </form>
@@ -41,7 +41,7 @@
       <section id="settings-panel" class="view-panel" style="display:none">
         <div class="setting-row">
           <span class="setting-label">Hotkey</span>
-          <kbd id="shortcut-display" title="Нажми, чтобы изменить">⌃⌥E</kbd>
+          <kbd id="shortcut-display" title="Click to change">⌃⌥E</kbd>
         </div>
         <div class="setting-row">
           <label class="setting-label" for="provider-select">Model</label>
@@ -50,9 +50,9 @@
         <div class="setting-row">
           <label class="setting-label" for="key-input">API key</label>
           <div class="key-field">
-            <input type="password" id="key-input" placeholder="вставь токен" autocomplete="off" />
+            <input type="password" id="key-input" placeholder="paste token" autocomplete="off" />
             <span id="key-saved" class="saved" style="display:none">
-              <span class="check">✓</span> сохранён <a id="key-edit" class="link">изменить</a>
+              <span class="check">✓</span> saved <a id="key-edit" class="link">edit</a>
             </span>
           </div>
         </div>
@@ -64,16 +64,15 @@
              gear glows green when one is waiting (Ribbit-style). -->
         <div class="setting-row">
           <span class="setting-label" id="version">v0.0.0</span>
-          <button id="update-btn" class="ghost" title="Проверить и установить обновление">check update</button>
+          <button id="update-btn" class="ghost" title="Check for and install an update">check update</button>
         </div>
-        <p class="settings-note">История правок хранится только на этом компьютере.</p>
       </section>
 
       <!-- View: debug log (opened from settings). -->
       <div id="debug-panel" class="view-panel debug-view" style="display:none">
         <div class="panel-head">
           <span>debug log</span>
-          <button id="debug-close" class="win-btn" title="Назад">&#x2715;</button>
+          <button id="debug-close" class="win-btn" title="Back">&#x2715;</button>
         </div>
         <pre id="debug-content"></pre>
       </div>

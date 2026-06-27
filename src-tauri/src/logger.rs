@@ -85,9 +85,9 @@ pub fn read_recent_entries(limit: usize, history_days: i64) -> Vec<serde_json::V
         }
     }
 
-    // Sort by ts descending (newest first). Naive reverse() ломался когда
-    // вчерашних записей > limit — сегодняшние оказывались в хвосте и резались
-    // truncate'ом, хотя фактически они новее.
+    // Sort by ts descending (newest first). A naive reverse() broke when there
+    // were more than `limit` entries from yesterday — today's ended up at the
+    // tail and got cut by the truncate, even though they're actually newer.
     all_entries.sort_by(|a, b| {
         let ta = a["ts"].as_str().unwrap_or("");
         let tb = b["ts"].as_str().unwrap_or("");
