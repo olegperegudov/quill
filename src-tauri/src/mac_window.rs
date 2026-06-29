@@ -134,3 +134,37 @@ pub fn position_at_cursor(window: &tauri::WebviewWindow) -> Result<(), String> {
 pub fn position_at_cursor(_window: &tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
 }
+
+/// Bundle id of the app that's frontmost right now (e.g. `com.mitchellh.ghostty`).
+/// Logged just before a capture so a `captured 0 chars` is traceable to the app
+/// it targeted — different apps copy differently, and this says which one.
+#[cfg(target_os = "macos")]
+pub fn frontmost_app() -> String {
+    use cocoa::base::{id, nil};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    unsafe {
+        let ws: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        if ws == nil {
+            return "unknown".into();
+        }
+        let app: id = msg_send![ws, frontmostApplication];
+        if app == nil {
+            return "unknown".into();
+        }
+        let bid: id = msg_send![app, bundleIdentifier];
+        if bid == nil {
+            return "unknown".into();
+        }
+        let cstr: *const std::os::raw::c_char = msg_send![bid, UTF8String];
+        if cstr.is_null() {
+            return "unknown".into();
+        }
+        std::ffi::CStr::from_ptr(cstr).to_string_lossy().into_owned()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn frontmost_app() -> String {
+    "n/a".into()
+}

@@ -3156,12 +3156,13 @@ dependencies = [
 
 [[package]]
 name = "quill"
-version = "0.1.19"
+version = "0.1.21"
 dependencies = [
  "arboard",
  "chrono",
  "cocoa",
  "core-foundation 0.10.1",
+ "core-graphics 0.24.0",
  "dirs",
  "enigo",
  "objc",

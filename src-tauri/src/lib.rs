@@ -300,7 +300,10 @@ fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
         // Let the hotkey's modifier keys fully release before we synthesize ⌘C —
         // otherwise the OS may still see ctrl/alt held and copy a different chord.
         std::thread::sleep(std::time::Duration::from_millis(60));
-        debug_log::log("hotkey fired → capturing selection");
+        debug_log::log(&format!(
+            "hotkey fired → capturing selection (frontmost: {})",
+            mac_window::frontmost_app()
+        ));
 
         let text = match selection::capture() {
             Ok(t) => t,

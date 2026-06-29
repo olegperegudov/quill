@@ -12,31 +12,17 @@
 //! If it never changes, the Copy was a no-op → nothing selected.
 
 use arboard::Clipboard;
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 
 // Unlikely to ever equal a real selection (leading NUL). If Copy replaces it,
 // something was selected.
 const SENTINEL: &str = "\u{0}quill::no-selection";
 
-// macOS copies with ⌘C, Windows/Linux with Ctrl+C.
+// kVK_ANSI_C — the virtual keycode of the physical C key. We post ⌘C as a raw
+// CGEvent with the Command flag set on the key event itself (see send_copy), so
+// it fires regardless of the active layout (e.g. a Cyrillic layout) and the
+// receiving app reads a real ⌘C from the event's own flags.
 #[cfg(target_os = "macos")]
-const COPY_MODIFIER: Key = Key::Meta;
-#[cfg(not(target_os = "macos"))]
-const COPY_MODIFIER: Key = Key::Control;
-
-// The "C" of the copy chord.
-//
-// On macOS we send the *raw* keycode of the physical C key (kVK_ANSI_C = 0x08),
-// NOT `Key::Unicode('c')`. `Key::Unicode` makes enigo resolve the keycode through
-// the macOS Text Input Source APIs (TSM/HIToolbox), which assert they run on the
-// main thread and hard-crash the process (SIGTRAP) when called from our worker
-// thread — which is exactly where capture() runs. The raw keycode skips that
-// lookup entirely, and as a bonus ⌘C then fires regardless of the active layout
-// (e.g. a Cyrillic layout), which is what we want for a bilingual tool.
-#[cfg(target_os = "macos")]
-const COPY_KEY: Key = Key::Other(0x08);
-#[cfg(not(target_os = "macos"))]
-const COPY_KEY: Key = Key::Unicode('c');
+const KEY_C: u16 = 0x08;
 
 /// Grab the current selection. Returns the trimmed selected text, or an empty
 /// string when nothing is selected. The user's prior clipboard is restored
@@ -72,21 +58,57 @@ pub fn capture() -> Result<String, String> {
     Ok(captured.trim().to_string())
 }
 
+// macOS: post ⌘C as a raw CGEvent with the Command flag set directly on the C
+// key event.
+//
+// The previous approach (enigo: press ⌘, click C, release ⌘) left the Command
+// flag *off* the C key event in many apps — terminals (Ghostty, Terminal),
+// Electron — so the app saw a bare "c", the copy never fired, and capture()
+// returned 0 chars every single time. Setting `CGEventFlagCommand` on the key
+// event itself is the synthesis every selection-grabbing tool relies on: the
+// receiving app reads the flag from the event, so it's a real ⌘C no matter what
+// modifiers are physically held or which keyboard layout is active.
+#[cfg(target_os = "macos")]
 fn send_copy() -> Result<(), String> {
+    use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+    let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState)
+        .map_err(|_| "CGEventSource::new failed".to_string())?;
+
+    let down = CGEvent::new_keyboard_event(source.clone(), KEY_C, true)
+        .map_err(|_| "copy key-down event".to_string())?;
+    down.set_flags(CGEventFlags::CGEventFlagCommand);
+    down.post(CGEventTapLocation::HID);
+
+    // A short hold so apps that debounce keypresses still register the chord.
+    std::thread::sleep(std::time::Duration::from_millis(15));
+
+    let up = CGEvent::new_keyboard_event(source, KEY_C, false)
+        .map_err(|_| "copy key-up event".to_string())?;
+    up.set_flags(CGEventFlags::CGEventFlagCommand);
+    up.post(CGEventTapLocation::HID);
+
+    Ok(())
+}
+
+// Windows/Linux: Ctrl+C via enigo. The macOS-only TSM crash that forced a raw
+// keycode there doesn't apply, so the portable Unicode 'c' is fine here.
+#[cfg(not(target_os = "macos"))]
+fn send_copy() -> Result<(), String> {
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
     enigo
-        .key(COPY_MODIFIER, Direction::Press)
+        .key(Key::Control, Direction::Press)
         .map_err(|e| format!("modifier press: {}", e))?;
-    // Let ⌘ register before C lands, and hold the chord a beat before releasing.
-    // Without these the OS can see a bare "c" (copy never fires) — the difference
-    // between a 0-char capture and a real one in fussy apps (terminals, Electron).
     std::thread::sleep(std::time::Duration::from_millis(20));
     enigo
-        .key(COPY_KEY, Direction::Click)
+        .key(Key::Unicode('c'), Direction::Click)
         .map_err(|e| format!("c click: {}", e))?;
     std::thread::sleep(std::time::Duration::from_millis(20));
     enigo
-        .key(COPY_MODIFIER, Direction::Release)
+        .key(Key::Control, Direction::Release)
         .map_err(|e| format!("modifier release: {}", e))?;
     Ok(())
 }
@@ -106,18 +128,11 @@ fn restore(clipboard: &mut Clipboard, saved: Option<String>) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    // Regression guard for a real crash: on macOS, routing the copy key through
-    // `Key::Unicode` triggers a main-thread-only Text Input Source lookup and
-    // SIGTRAPs the process from our worker thread. The copy key MUST stay a raw
-    // keycode there. (No test on other platforms — Unicode is fine off-main.)
+    // The copy keycode must stay kVK_ANSI_C. If this drifts, ⌘C turns into
+    // ⌘<some-other-key> and capture silently breaks.
     #[cfg(target_os = "macos")]
     #[test]
-    fn macos_copy_key_is_raw_keycode_not_unicode() {
-        assert!(
-            matches!(COPY_KEY, Key::Other(_)),
-            "macOS copy key must be a raw keycode, not Key::Unicode (off-main TSM crash)"
-        );
+    fn macos_copy_keycode_is_c() {
+        assert_eq!(super::KEY_C, 0x08, "kVK_ANSI_C must be 0x08");
     }
 }

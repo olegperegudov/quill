@@ -3,6 +3,39 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.23 — capture actually works: ⌘C posted with the Command flag set
+
+**The real capture bug, found in the on-disk debug log.** With 0.1.22 signed and
+Accessibility granted, the hotkey still captured nothing. The log was decisive:
+`hotkey fired → capturing selection` immediately followed by `captured 0 chars`,
+on **every** attempt across **every** build going back weeks — and crucially, the
+need-access path was *not* taken (so trust was fine). So it was never signing and
+never permission: the synthetic ⌘C itself copied nothing.
+
+**Why.** `selection.rs` synthesized the copy via enigo as three events — press
+⌘, click C, release ⌘. In many apps (terminals like Ghostty/Terminal, Electron)
+the Command flag never landed on the C key event, so the app saw a bare "c", the
+copy never fired, and the clipboard stayed the sentinel → `captured 0 chars`.
+
+**Confirmed before shipping, on the same Mac.** A probe drove a properly-flagged
+synthetic ⌘C (System Events `keystroke "c" using command down`) over a scratch
+selection: the clipboard picked up the text. So a *flagged* ⌘C copies here; the
+unflagged enigo chord was the bug.
+
+**The fix.** macOS now posts ⌘C as a raw `CGEvent` with `CGEventFlagCommand` set
+directly on the C key event (keycode `0x08`, kVK_ANSI_C) — the synthesis every
+selection-grabbing tool relies on. The app reads the flag off the event, so it's
+a real ⌘C regardless of layout or which modifiers are physically held. Windows/
+Linux keep enigo's Ctrl+C.
+
+- New diagnostic: each capture logs the frontmost app's bundle id
+  (`hotkey fired → capturing selection (frontmost: com.mitchellh.ghostty)`), so a
+  future `0 chars` is traceable to the exact app it targeted.
+- `core-graphics` added as a direct dep (already in the tree via cocoa).
+- This is a cert-to-cert update (same signing identity as 0.1.22), so it does
+  **not** reset the Accessibility grant — no re-enable needed, and it doubles as
+  the first clean update to check whether the VPN now survives.
+
 ## 0.1.21 — stable self-signed signing (Accessibility grant survives updates), normal window
 
 **Three reports.** (1) The window floated above every other window — couldn't be

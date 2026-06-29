@@ -39,3 +39,7 @@ objc = "0.2"
 # Ask macOS whether we're trusted for Accessibility (synthetic keystrokes) and
 # pop the system grant dialog when we aren't — see accessibility.rs.
 core-foundation = "0.10"
+# Post ⌘C as a raw key event with the Command flag set directly on it — the
+# reliable way to copy the selection (enigo's separate-modifier chord left the
+# flag off and copied nothing). See selection.rs.
+core-graphics = "0.24"
