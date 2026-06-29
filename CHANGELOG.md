@@ -3,6 +3,22 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.27 — app icon recolored to sapphire
+
+The UI went sapphire in 0.1.26 but the app icon (Dock, Finder, tray, installer,
+Windows .ico) was still the violet feather — a mismatch everywhere the OS shows it.
+
+Recolored the icon to match the accent. The master `icons/icon.png` was hue-rotated
+violet → sapphire (−40° hue, ×1.28 saturation) so the rounded-square gradient, the
+white feather, the anti-aliasing and the rounded corners stay pixel-identical — only
+the blue changes. White feather is untouched (recolor skips near-zero-saturation
+pixels). The gradient highlight lands at ~`#67a4f6`, in the `#5b9df7` accent family.
+
+All bundle sizes regenerated from that master with `tauri icon` (32/128/128@2x PNG,
+`icon.icns`, `icon.ico`, the Square*Logo set). iOS/Android assets `tauri icon` also
+emits were dropped — this is a desktop bundle and `tauri.conf.json` references only
+the desktop set.
+
 ## 0.1.26 — accent recolor: violet → sapphire ink
 
 The violet accent never sat right. Reskinned to a sapphire blue ("ink on paper"),
