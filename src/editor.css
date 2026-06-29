@@ -2,7 +2,7 @@
    between the chat (hotkey surface), settings, and the debug log — the gear
    flips chat ↔ settings (.view-panel, below). Ribbit-style view switch.
    Visual language (greenfield, set here): dark slate base shared with the
-   Ribbit family, a softer system-sans for a "writing" feel, and an ink-violet
+   Ribbit family, a softer system-sans for a "writing" feel, and a sapphire-ink
    accent that's distinctly Quill, not Ribbit's green. */
 
 :root {
@@ -12,8 +12,8 @@
   --line: #232a35;
   --text: #d8dee9;
   --muted: #7a8493;
-  --ink: #a78bfa;        /* Quill accent — violet ink */
-  --ink-dim: #6d5bd0;
+  --ink: #5b9df7;        /* Quill accent — sapphire ink */
+  --ink-dim: #3f6fd1;
   --good: #4ade80;
   --bad: #f87171;
   --stop: #e5484d;       /* generation in flight → the send button turns "stop" */
@@ -117,7 +117,7 @@ body {
 /* Your text — accent tint, tail on the right. */
 .msg-user .bubble {
   background: var(--ink-dim);
-  color: #f3effe;
+  color: #eef4fe;
   border-bottom-right-radius: 4px;
 }
 /* The correction — panel, tail on the left. */
@@ -244,7 +244,7 @@ body {
   background: var(--ink);
   border: none;
   border-radius: 9px;
-  color: #15101f;
+  color: #0c1a30;
   cursor: pointer;
   transition: background 0.12s;
 }
@@ -362,7 +362,7 @@ kbd {
   white-space: nowrap;
 }
 kbd:hover { border-color: var(--ink-dim); color: var(--ink); }
-kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(167,139,250,0.1); }
+kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(91,157,247,0.12); }
 
 /* Ghost buttons (debug, update) — update glows green when armed. */
 .ghost {

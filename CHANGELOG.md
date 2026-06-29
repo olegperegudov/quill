@@ -3,6 +3,21 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.26 — accent recolor: violet → sapphire ink
+
+The violet accent never sat right. Reskinned to a sapphire blue ("ink on paper"),
+chosen from a live side-by-side of the real UI in four palettes (violet, sapphire,
+Anthropic clay, amber). Centralized in two tokens plus three stragglers that were
+hardcoded violet:
+
+- `--ink` `#a78bfa → #5b9df7`, `--ink-dim` `#6d5bd0 → #3f6fd1` (drives the feather
+  mark, your-bubble fill, focus rings, links, send button, hotkey-capture state).
+- your-bubble text `#f3effe → #eef4fe`, send glyph `#15101f → #0c1a30`,
+  hotkey-capture tint `rgba(167,139,250,.1) → rgba(91,157,247,.12)`.
+
+The stop-button red (`--stop`) is deliberately independent of the accent, so it
+stays unambiguous whatever the accent becomes.
+
 ## 0.1.25 — stop button: cancel a running correction
 
 **Report.** After sending, there's no way to cancel — you wait out the request.
