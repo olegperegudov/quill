@@ -3,6 +3,30 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.24 — chat opens on the current Space (no desktop teleport)
+
+**Report.** The hotkey "moves me to another desktop" and shows the chat there
+instead of popping it where I'm working.
+
+**Cause.** We position the window at the cursor *before* showing it. The window
+carried `MoveToActiveSpace` (the same behavior Ribbit uses), but Ribbit never
+repositions its window — we do, and positioning a still-hidden window that has a
+"home" Space, then showing it, teleported the user to that home Space.
+
+**Fix.** `apply_spaces_behavior` now sets `CanJoinAllSpaces` (1<<0) instead of
+`MoveToActiveSpace` (1<<1). With no home Space the window is resident on every
+Space, so showing it at the cursor always lands on the current desktop. It's
+hidden between uses, so "on every Space" is never visible.
+
+**Capture status (from the 0.1.23 debug log, for the record).** The 0.1.23 ⌘C
+fix works: `frontmost: com.quill.app → captured 62 chars`. The one case that
+still yields `0 chars` is a selection made *inside* a TUI like Claude Code
+running in Ghostty: that selection lives inside the TUI's own redraw (mouse
+reporting), so it's never a real terminal selection and ⌘C — Ghostty's copy —
+has nothing to grab. No external tool can read a TUI's in-progress input; a
+real terminal selection (or any native field / browser) captures fine. Not a
+Quill bug, so nothing to fix here — documented so it isn't re-chased.
+
 ## 0.1.23 — capture actually works: ⌘C posted with the Command flag set
 
 **The real capture bug, found in the on-disk debug log.** With 0.1.22 signed and

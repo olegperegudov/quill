@@ -47,11 +47,19 @@ pub fn apply_rounded_corners(_window: &tauri::WebviewWindow, _radius: f64) -> Re
     Ok(())
 }
 
-/// Make the window follow the user's current Space instead of being pinned to
-/// the Space it was first shown on. Without this, clicking the tray icon while
-/// on a different Space teleports the user back to the window's home Space.
+/// Make the chat appear on whatever Space the user is currently on, never
+/// switching Spaces.
 ///
-/// NSWindowCollectionBehaviorMoveToActiveSpace = 1 << 1 = 2.
+/// We position the window at the cursor *before* showing it. With
+/// MoveToActiveSpace the window still kept a "home" Space, so popping it at the
+/// cursor teleported the user to that Space (the bug reported: "the hotkey moves
+/// me to another desktop"). CanJoinAllSpaces gives the window no home Space at
+/// all — it's resident on every Space — so showing it at the cursor always lands
+/// on the current desktop. It's hidden between uses, so "on every Space" is
+/// never visible as clutter. (Ribbit can use MoveToActiveSpace because it
+/// doesn't reposition the window; we do, which is what exposed the home-Space.)
+///
+/// NSWindowCollectionBehaviorCanJoinAllSpaces = 1 << 0 = 1.
 #[cfg(target_os = "macos")]
 pub fn apply_spaces_behavior(window: &tauri::WebviewWindow) -> Result<(), String> {
     use cocoa::base::id;
@@ -59,9 +67,9 @@ pub fn apply_spaces_behavior(window: &tauri::WebviewWindow) -> Result<(), String
 
     let ns_window = window.ns_window().map_err(|e| e.to_string())? as id;
     unsafe {
-        let behavior: u64 = 1 << 1;
+        let behavior: u64 = 1 << 0;
         let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
-        crate::debug_log::log("collectionBehavior=MoveToActiveSpace applied");
+        crate::debug_log::log("collectionBehavior=CanJoinAllSpaces applied");
     }
     Ok(())
 }
