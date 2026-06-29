@@ -16,6 +16,8 @@
   --ink-dim: #6d5bd0;
   --good: #4ade80;
   --bad: #f87171;
+  --stop: #e5484d;       /* generation in flight → the send button turns "stop" */
+  --stop-hi: #ef5f63;
   --radius: 10px;
 }
 
@@ -246,7 +248,23 @@ body {
   cursor: pointer;
   transition: background 0.12s;
 }
-.send:hover { background: #b89dfb; }
+.send:hover { filter: brightness(1.08); }
+/* Both glyphs share the single grid cell; only one shows at a time. */
+.send .i-stop { display: none; }
+.send .i-send { display: block; }
+
+/* While a correction is running the send button becomes a stop button — a red
+   rounded square that cancels the wait (the request is non-streaming, so this
+   drops the pending bubble and lets you edit + resend). */
+.composer.generating .send { background: var(--stop); color: #fff; }
+.composer.generating .send:hover { background: var(--stop-hi); filter: none; }
+.composer.generating .send .i-send { display: none; }
+.composer.generating .send .i-stop {
+  display: block;
+  width: 11px; height: 11px;
+  border-radius: 3px;
+  background: currentColor;
+}
 
 /* Views (settings, debug) -------------------------------------------- */
 /* The titlebar above stays put; these replace the chat body in place (the gear

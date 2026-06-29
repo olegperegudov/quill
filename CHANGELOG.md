@@ -3,6 +3,23 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.25 — stop button: cancel a running correction
+
+**Report.** After sending, there's no way to cancel — you wait out the request.
+
+**Fix.** While a correction is in flight the send arrow becomes a red rounded
+"stop" square. Clicking it (or Esc) drops the pending bubble and returns to the
+composer. The correction is a single non-streaming request, so "stop" is a UI
+cancel: the in-flight call's result is discarded (its bubble already removed) and
+you're free to edit and resend — the request may still finish server-side, but
+nothing it returns is shown. `editor.js` tracks in-flight corrections by id so a
+discarded result can't slip into the chat after you've stopped.
+
+- The send/stop swap is one button: `.composer.generating .send` shows the stop
+  glyph in `--stop` red; at rest it's the send arrow.
+- Dropped a hardcoded violet hover on the send button (`#b89dfb`) for a
+  theme-relative `brightness()` so the hover follows whatever the accent is.
+
 ## 0.1.24 — chat opens on the current Space (no desktop teleport)
 
 **Report.** The hotkey "moves me to another desktop" and shows the chat there

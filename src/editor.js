@@ -19,6 +19,7 @@ const composer = $("#composer");
 const settingsPanel = $("#settings-panel");
 const debugPanel = $("#debug-panel");
 const settingsBtn = $("#settings-btn");
+const sendBtn = $("#send");
 
 // Diagnostics without DevTools (disabled in prod) — goes to the shared debug log.
 function dlog(msg) {
@@ -113,19 +114,48 @@ function addPending() {
   return msg;
 }
 
+// Corrections in flight: id → its pending bubble. While any are running, the
+// send button turns into a stop button. The correction is a single
+// non-streaming request, so "stop" means: drop the pending bubble and ignore
+// whatever the call eventually returns, freeing the user to edit and resend.
+const inFlight = new Map();
+let correctionId = 0;
+
+function reflectGenerating() {
+  const busy = inFlight.size > 0;
+  composer.classList.toggle("generating", busy);
+  sendBtn.title = busy ? "Stop" : "Send (Enter)";
+  sendBtn.setAttribute("aria-label", busy ? "Stop" : "Send");
+}
+
+function stopGenerating() {
+  for (const pending of inFlight.values()) pending.remove();
+  inFlight.clear();
+  reflectGenerating();
+  input.focus();
+}
+
 // Send `text` through correct→reply. Each call owns its own pending bubble, so
 // concurrent corrections resolve into their own slots.
 async function runCorrection(text) {
+  const id = ++correctionId;
   ensureDay();
   addMessage("user", text);
   const pending = addPending();
+  inFlight.set(id, pending);
+  reflectGenerating();
   try {
     const corrected = await invoke("editor_correct", { text });
+    if (!inFlight.has(id)) return; // stopped while we were waiting → discard
     pending.remove();
     addMessage("bot", corrected, { clean: corrected === text });
   } catch (err) {
+    if (!inFlight.has(id)) return; // stopped while we were waiting → discard
     pending.remove();
     addMessage("system", `⚠ ${err}`);
+  } finally {
+    inFlight.delete(id);
+    reflectGenerating();
   }
 }
 
@@ -162,7 +192,12 @@ function send() {
   runCorrection(text);
 }
 
-$("#composer").addEventListener("submit", (e) => { e.preventDefault(); send(); });
+$("#composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  // The same button is "send" at rest and "stop" while a correction runs.
+  if (inFlight.size > 0) stopGenerating();
+  else send();
+});
 input.addEventListener("input", autoGrow);
 input.addEventListener("keydown", (e) => {
   // Enter sends; Shift+Enter is a newline.
@@ -203,6 +238,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if ($("#shortcut-display")?.classList.contains("capturing")) return;
   e.preventDefault();
+  if (inFlight.size > 0) return stopGenerating(); // Esc stops generation first
   if (currentView === "debug") return setView("settings");
   if (currentView === "settings") return setView("chat");
   invoke("close_editor");
