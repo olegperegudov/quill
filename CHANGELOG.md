@@ -30,12 +30,22 @@ update; Ribbit only needs Microphone.
 
 **The fix — stable self-signed certificate.** CI now signs both macOS arches with
 a self-signed code-signing cert (secrets `APPLE_CERTIFICATE` /
-`APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`, imported by
-tauri-action). The designated requirement then anchors to the **certificate**
+`APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`). The designated
+requirement then anchors to the **certificate**
 (`identifier "com.quill.app" and certificate root = H"…"`), not the cdhash — so
 the Accessibility grant survives every update and the selection capture keeps
 working. Not notarized (no Apple account), so first launch still needs a
 right-click→Open, exactly like the old ad-hoc builds.
+
+**0.1.21's macOS build failed on signing — fixed in 0.1.22.** A self-signed cert
+isn't a *valid* codesigning identity until its root is trusted; tauri-action's own
+`APPLE_CERTIFICATE` import doesn't add that trust, so the bundler aborted with
+`failed to resolve signing identity` (reproduced locally: `codesign --sign` →
+`no identity found` without trust). CI now has a dedicated step that builds its own
+keychain, imports the p12, and trusts the cert as a `codeSign` root in the System
+keychain via passwordless `sudo` (no GUI auth on the runner); the bundler then gets
+only `APPLE_SIGNING_IDENTITY`. So 0.1.21 shipped Windows-only; the first real signed
+macOS build is 0.1.22.
 
 - `tcc_reset.rs` rekeyed off the **signing identity** instead of the cdhash: it
   resets once on the ad-hoc→cert migration (clears the stale ad-hoc grant so the
