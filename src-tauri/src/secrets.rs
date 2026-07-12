@@ -14,7 +14,6 @@
 //! Public API is unchanged: at startup we load any stored keys into the process
 //! env, and corrector.rs keeps reading them via std::env::var(provider.env_var).
 
-use crate::corrector::PROVIDERS;
 use crate::debug_log;
 use std::path::{Path, PathBuf};
 
@@ -36,18 +35,19 @@ fn from_file(env_var: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix(&prefix).map(str::to_string))
 }
 
-/// Pull every stored provider key into the process environment. Called once at
-/// startup so the corrector can read keys the usual way.
-pub fn load_into_env() {
-    for p in PROVIDERS {
+/// Pull the stored keys for the given slots into the process environment, so the
+/// corrector can read them the usual way. The slots come from the configured
+/// provider stack — a custom endpoint owns its own slot, not a catalog one.
+pub fn load_into_env(env_vars: &[String]) {
+    for env_var in env_vars {
         // Respect an already-exported env var (dev override) over the file.
-        if std::env::var(p.env_var).map(|k| !k.is_empty()).unwrap_or(false) {
+        if std::env::var(env_var).map(|k| !k.is_empty()).unwrap_or(false) {
             continue;
         }
-        if let Some(key) = from_file(p.env_var) {
+        if let Some(key) = from_file(env_var) {
             if !key.is_empty() {
-                unsafe { std::env::set_var(p.env_var, &key) };
-                debug_log::log(&format!("loaded {} from config", p.env_var));
+                unsafe { std::env::set_var(env_var, &key) };
+                debug_log::log(&format!("loaded {} from config", env_var));
             }
         }
     }

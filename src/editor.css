@@ -316,7 +316,111 @@ body {
 .setting-label { font-size: 0.82rem; color: var(--muted); flex-shrink: 0; }
 #version { color: var(--muted); }
 
-select, input[type="password"], input[type="text"] {
+/* Provider stack ------------------------------------------------------ */
+/* The "Models" block: one card per provider, in priority order. It sits in the
+   settings list, so it borrows the row rhythm rather than inventing its own. */
+.setting-row--head { border-bottom: none; padding-bottom: 0.3rem; }
+.setting-note { font-size: 0.72rem; color: var(--muted); opacity: 0.75; }
+
+.provider-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+.provider-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.provider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.provider-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; }
+.provider-primary-tag {
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+  background: rgba(91, 157, 247, 0.12);
+  border: 1px solid rgba(91, 157, 247, 0.25);
+  border-radius: 4px;
+  padding: 0.02rem 0.28rem;
+}
+.provider-ctrls { display: flex; gap: 0.1rem; }
+.provider-mini-btn {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.provider-mini-btn:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.provider-mini-btn:disabled { opacity: 0.25; cursor: default; }
+.provider-del:hover:not(:disabled) { background: #5b2330; color: #ffb4b4; }
+
+.provider-field { display: flex; align-items: center; gap: 0.5rem; }
+.provider-field-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  width: 52px; /* fits the longest label ("endpoint") without clipping */
+  flex-shrink: 0;
+}
+/* Two-class selectors on purpose: the generic `input[type="text"]` rule below is
+   attribute-specific (and caps width at 60%), so a single class would lose. */
+.provider-field .provider-input {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  font-size: 0.74rem;
+  padding: 0.28rem 0.4rem;
+}
+.provider-field .provider-input.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--muted); }
+.key-saved-check { color: var(--good); }
+
+/* An active fallback must never be silent — the user would blame Quill. */
+.fallback-status {
+  font-size: 0.72rem;
+  color: #fbbf7a;
+  background: rgba(251, 191, 122, 0.08);
+  border: 1px solid rgba(251, 191, 122, 0.2);
+  border-radius: 6px;
+  padding: 0.3rem 0.45rem;
+}
+
+.provider-add select {
+  width: 100%;
+  min-width: 0;
+  color: var(--muted);
+  border-style: dashed;
+}
+.provider-add select:hover { border-color: var(--ink-dim); color: var(--text); }
+
+.fallback-knobs .knobs { font-size: 0.75rem; color: var(--muted); text-align: right; }
+.fallback-knobs input[type="number"] {
+  width: 54px;
+  text-align: center;
+  padding: 0.12rem 0.25rem;
+  font-size: 0.72rem;
+  max-width: none;
+}
+
+select, input[type="password"], input[type="text"], input[type="number"] {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 6px;

@@ -3,6 +3,58 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.28 — model stack: endpoint + model per card, Groq, auto-fallback
+
+**Was.** The settings "Model" dropdown picked a *provider*, not a model: base url
+and model id were compile-time constants in `corrector::PROVIDERS`. No way to
+point Quill at a different model on the same provider, at a self-hosted endpoint,
+or at Groq at all. A rate-limited or dead provider failed the correction outright.
+
+**Now.** `config.json` holds an ordered `providers` stack (`fallback.rs`, ported
+from Ribbit — which runs the same machine over two stacks; Quill has one, so the
+`Stack` selector is gone and the state is a single global). Each entry is
+`{id, label, url, model, key_env}`; endpoint, model id and key are editable per
+card behind the gear. Order is priority: the top entry runs, and on a transient
+failure the walk falls through to the next entry *within the same request*, so the
+correction the user is waiting on still lands. Repeated transient failures
+(threshold, default 2) stick the switch until a cooldown (default 60 min) snaps
+back to the first card; both knobs are in settings.
+
+- **Failure classification** (`fallback::classify`, the one place the rule lives):
+  429 / 5xx / timeout / transport → `Switch` (try the backup). 4xx and an
+  unusable-but-200 body → `Hard`, surfaced immediately: a bad key/url/model is a
+  config bug to see, not something to mask behind a slower backup.
+- **Groq added to the catalog** — `https://api.groq.com/openai/v1/chat/completions`,
+  default `llama-3.3-70b-versatile`; `meta-llama/llama-4-scout-17b-16e-instruct`
+  is the 17B alternative (both ids verified live against Groq's `/models`). LPU
+  inference lands a 70B answer in well under a second, so it's the new primary.
+- **Custom endpoints** — the "+ add model" picker has a `custom…` option: blank
+  url/model and its own key slot (`QUILL_KEY_<id>`).
+- **Keys** stay in the private 0600 config file, now one slot per stack entry.
+  `secrets::load_into_env` takes the slots from the configured stack instead of
+  the catalog, so a custom entry's key loads too.
+- **Migration** — `migrate_providers()` runs at launch, no-op once the stack
+  exists: seeds Groq first with the previous `llm_provider` behind it as backup,
+  reusing the key already on disk. Groq starts keyless, and a keyless entry is
+  skipped by the walk, so corrections keep running on the backup until a Groq key
+  is pasted — the update can't break a working install.
+- **UI** — model cards (name + `first` tag, ↑/↓ reorder, ✕ remove, endpoint /
+  model / key rows) inside the settings overlay, in its existing row rhythm, plus
+  a live "⚡ running on <backup> · first choice retried in ~N min" line so an
+  active fallback is never silent. Dead commands (`set_api_key`,
+  `set_llm_provider`, `list_llm_providers`) removed.
+- **CSS gotcha worth remembering:** `input[type="text"]` is attribute-specific, so
+  a single-class rule loses to it — the card inputs need `.provider-field
+  .provider-input` to beat the panel's 60% width cap.
+
+**Tests.** `cargo test --lib` — 32 pass, incl. 13 new in `fallback.rs` (classify
+transient vs hard; threshold/cooldown transitions; `run_with_failover`: rescue by
+the next entry inside one request, hard error stops the walk, keyless entries
+skipped without counting as failures, deep failures don't feed the sticky tally)
+plus 3 for the seed/migration. `npm test` — 7 pass. Settings overlay eyeballed in
+a headless browser against a stubbed Tauri backend: first-run one-card view,
+two-card stack, active-fallback banner.
+
 ## 0.1.27 — app icon recolored to sapphire
 
 The UI went sapphire in 0.1.26 but the app icon (Dock, Finder, tray, installer,

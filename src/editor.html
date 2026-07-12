@@ -44,18 +44,20 @@
           <span class="setting-label">Hotkey</span>
           <kbd id="shortcut-display" title="Click to change">⌃⌥E</kbd>
         </div>
-        <div class="setting-row">
-          <label class="setting-label" for="provider-select">Model</label>
-          <select id="provider-select"></select>
+        <!-- Models: an ordered stack. The top card runs; if it rate-limits or
+             goes down, the next one takes over. Order = priority. -->
+        <div class="setting-row setting-row--head">
+          <span class="setting-label">Models</span>
+          <span class="setting-note">top one runs · next covers it</span>
         </div>
-        <div class="setting-row">
-          <label class="setting-label" for="key-input">API key</label>
-          <div class="key-field">
-            <input type="password" id="key-input" placeholder="paste token" autocomplete="off" />
-            <span id="key-saved" class="saved" style="display:none">
-              <span class="check">✓</span> saved <a id="key-edit" class="link">edit</a>
-            </span>
-          </div>
+        <div id="provider-stack" class="provider-stack"></div>
+        <div class="setting-row fallback-knobs">
+          <span class="setting-label">Fall back</span>
+          <span class="knobs">
+            after <input type="number" id="fb-threshold" min="1" max="100" title="Consecutive failures before switching" />
+            fails · retry the first in
+            <input type="number" id="fb-cooldown" min="1" max="1440" title="Minutes on a backup before retrying the first model" /> min
+          </span>
         </div>
         <div class="setting-row">
           <span class="setting-label">Debug log</span>

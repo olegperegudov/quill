@@ -1,17 +1,25 @@
 //! Sends the user's selected text to an OpenAI-compatible chat-completions
-//! endpoint (RouterAI / OpenAI / OpenRouter) and returns a lightly corrected
-//! version — spelling, punctuation, grammar fixed, meaning and tone preserved.
+//! endpoint (RouterAI / Groq / OpenAI / OpenRouter) and returns a lightly
+//! corrected version — spelling, punctuation, grammar fixed, meaning and tone
+//! preserved.
 //!
 //! This is the heart of Quill. The selection capture (selection.rs) feeds raw
 //! text in; the corrected text comes back out into the chat window, where the
 //! user clicks a bubble to copy it.
 //!
+//! Endpoint and model are not baked in: the caller passes them from the user's
+//! provider stack (fallback.rs), which also decides what happens when a call
+//! fails. This module only knows how to make one call and classify its failure.
+//!
 //! On any error/timeout nothing is logged or shown as a result, so a failed
 //! call never destroys the user's text.
 
+use crate::fallback::CallError;
 use std::sync::OnceLock;
 
-/// Connection + defaults for one OpenAI-compatible LLM endpoint.
+/// Connection + defaults for one OpenAI-compatible LLM endpoint. This is the
+/// catalog the "+ add model" picker prefills from — every field stays editable
+/// per entry afterwards.
 pub struct ProviderConfig {
     pub name: &'static str,
     pub env_var: &'static str,
@@ -20,7 +28,7 @@ pub struct ProviderConfig {
     pub default_model: &'static str,
 }
 
-/// Providers Quill knows about. Order matches the settings dropdown.
+/// Providers Quill knows about. Order matches the "+ add model" picker.
 pub const PROVIDERS: &[ProviderConfig] = &[
     ProviderConfig {
         name: "routerai",
@@ -28,6 +36,17 @@ pub const PROVIDERS: &[ProviderConfig] = &[
         label: "RouterAI",
         base_url: "https://routerai.ru/api/v1/chat/completions",
         default_model: "google/gemma-4-26b-a4b-it",
+    },
+    ProviderConfig {
+        name: "groq",
+        env_var: "GROQ_API_KEY",
+        label: "Groq",
+        base_url: "https://api.groq.com/openai/v1/chat/completions",
+        // Groq runs on LPUs — a 70B answer lands in well under a second, and the
+        // user is sitting in front of the chat waiting for it. The 17B scout
+        // model is the lighter alternative worth a second entry
+        // (meta-llama/llama-4-scout-17b-16e-instruct).
+        default_model: "llama-3.3-70b-versatile",
     },
     ProviderConfig {
         name: "openai",
@@ -166,29 +185,24 @@ pub fn warm_up_client() {
     let _ = client();
 }
 
-/// Call the configured provider with the selected text. Returns the corrected
-/// text on success. The caller leaves the selection untouched on error.
+/// Call one endpoint with the user's text. Returns the corrected text, or a
+/// `CallError` the stack classifies into "try the next provider" vs "surface
+/// this". The caller leaves the user's text untouched on error.
 pub fn correct_text(
     text: &str,
-    provider: &ProviderConfig,
+    url: &str,
+    model: &str,
     api_key: &str,
-) -> Result<String, String> {
-    if text.trim().is_empty() {
-        return Ok(text.to_string());
-    }
-    if api_key.is_empty() {
-        return Err(format!("no {} api key", provider.name));
-    }
-
+) -> Result<String, CallError> {
     let t0 = std::time::Instant::now();
-    let payload = build_payload(text, provider.default_model);
+    let payload = build_payload(text, model);
 
     // Single retry on transport error: pooled TLS connections occasionally go
     // stale between uses and reqwest reports a generic error. Chat completion
     // is idempotent, so a duplicate POST is safe.
     let send_once = || {
         client()
-            .post(provider.base_url)
+            .post(url)
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&payload)
@@ -202,27 +216,31 @@ pub fn correct_text(
                 error_kind(&first),
                 first
             ));
-            send_once().map_err(|e| format!("{} after retry: {}", error_kind(&e), e))?
+            send_once().map_err(|e| {
+                CallError::transport(e.is_timeout(), format!("{} after retry: {}", error_kind(&e), e))
+            })?
         }
     };
 
     let elapsed = t0.elapsed();
 
     if !response.status().is_success() {
-        let status = response.status();
+        let status = response.status().as_u16();
         let body = response.text().unwrap_or_default();
-        return Err(format!("http {}: {}", status, body.chars().take(200).collect::<String>()));
+        return Err(CallError::http(
+            status,
+            format!("http {}: {}", status, body.chars().take(200).collect::<String>()),
+        ));
     }
 
     let json: serde_json::Value = response
         .json()
-        .map_err(|e| format!("parse error: {}", e))?;
+        .map_err(|e| CallError::rejected(format!("parse error: {}", e)))?;
 
-    let corrected = parse_response(&json)?;
+    let corrected = parse_response(&json).map_err(CallError::rejected)?;
     crate::debug_log::log(&format!(
-        "corrector[{}/{}]: {:?} → {:?} ({:.2}s)",
-        provider.name,
-        provider.default_model,
+        "corrector[{}]: {:?} → {:?} ({:.2}s)",
+        model,
         text.chars().take(60).collect::<String>(),
         corrected.chars().take(60).collect::<String>(),
         elapsed.as_secs_f32()
@@ -335,15 +353,12 @@ mod tests {
     }
 
     #[test]
-    fn correct_text_returns_input_for_empty() {
-        let p = find_provider("routerai").unwrap();
-        assert_eq!(correct_text("", p, "fake_key").unwrap(), "");
-        assert_eq!(correct_text("   ", p, "fake_key").unwrap(), "   ");
-    }
-
-    #[test]
-    fn correct_text_errors_without_key() {
-        let p = find_provider("routerai").unwrap();
-        assert!(correct_text("hello", p, "").is_err());
+    fn groq_is_in_the_catalog() {
+        // The LPU-backed models are the reason Groq is here — a wrong base url or
+        // a rotted model id would only surface as a runtime 404.
+        let g = find_provider("groq").expect("groq must be offered");
+        assert_eq!(g.base_url, "https://api.groq.com/openai/v1/chat/completions");
+        assert_eq!(g.default_model, "llama-3.3-70b-versatile");
+        assert_eq!(g.env_var, "GROQ_API_KEY");
     }
 }

@@ -54,13 +54,17 @@ then open Quill normally. You won't hit this again — later updates install the
 
 Quill talks to any OpenAI-compatible model. Pick one provider and get its key:
 
-- [**RouterAI**](https://routerai.ru) (default) · [**OpenAI**](https://platform.openai.com/api-keys) · [**OpenRouter**](https://openrouter.ai/keys)
+- [**Groq**](https://console.groq.com/keys) (default — LPU-fast Llama) · [**RouterAI**](https://routerai.ru) · [**OpenAI**](https://platform.openai.com/api-keys) · [**OpenRouter**](https://openrouter.ai/keys)
 
 Grammar fixes are tiny requests, so this costs pennies.
 
 ### 3. Paste the key into Quill
 
-Open Quill (it lives in the menu-bar / tray), pick your provider, and paste the key. It's stored in your OS keychain. Done — select some text anywhere and hit the hotkey.
+Open Quill (it lives in the menu-bar / tray), hit the gear, and paste the key into the model card. It's stored in a private file on your machine. Done — select some text anywhere and hit the hotkey.
+
+### 4. Add a backup (optional)
+
+Under **Models**, hit **+ add model** for a second provider. The top card runs first; if it hits a rate limit or goes down, the next one takes over — the correction you're waiting on still lands. Reorder with ↑/↓, edit any endpoint or model id inline, or pick *custom…* for a self-hosted endpoint.
 
 ## Features
 
@@ -87,8 +91,9 @@ Open Quill (it lives in the menu-bar / tray), pick your provider, and paste the 
 
 | Setting | Description |
 |---------|-------------|
-| **Model** | Choose your provider (RouterAI / OpenAI / OpenRouter) |
-| **API key** | Paste your provider key — stored in the OS keychain |
+| **Models** | Your model stack — endpoint, model id and key per card. The top card runs, the rest are backups |
+| **Fall back** | How many consecutive failures flip Quill to the backup, and how long before it retries the first card |
+| **API key** | Per card — stored in a private (0600) file on your machine |
 | **Hotkey** | Click to customize, press your combo |
 | **Debug log** | View internal logs for troubleshooting |
 | **Version** | Click to view the changelog |
@@ -97,7 +102,7 @@ Open Quill (it lives in the menu-bar / tray), pick your provider, and paste the 
 ## Tech stack
 
 - [Tauri 2](https://tauri.app/) — Rust backend, HTML/CSS/JS frontend
-- OpenAI-compatible chat completions — RouterAI / OpenAI / OpenRouter
+- OpenAI-compatible chat completions — Groq / RouterAI / OpenAI / OpenRouter, or any custom endpoint
 - [Enigo](https://github.com/enigo-rs/enigo) — synthetic keyboard input (copy + type)
 - [arboard](https://github.com/1Password/arboard) — read the selection from the clipboard
 - [keyring](https://github.com/hwchen/keyring-rs) — API key in the OS keychain

@@ -41,34 +41,181 @@ function setStatus(text, kind = "idle") {
   }
 }
 
-// --- Provider + key ---
+// --- Provider stack ---
+//
+// An ordered list of providers rendered as compact cards. The top entry runs
+// first; the backend switches to the next on repeated rate-limits/outages and
+// snaps back after the cooldown. Order = priority, changed with ↑/↓. The section
+// is data-driven off get_config, so any mutation just re-renders it.
 
-let providers = [];
+let catalog = null; // [{name,label,default_model}] — fetched once
 
-async function loadProviders(currentProvider, providerKeys) {
-  providers = await invoke("list_llm_providers");
-  const sel = $("#provider-select");
-  sel.innerHTML = "";
-  for (const p of providers) {
+async function loadCatalog() {
+  if (!catalog) {
+    try { catalog = await invoke("list_provider_catalog"); }
+    catch (err) { dlog(`list_provider_catalog failed: ${err}`); catalog = []; }
+  }
+  return catalog;
+}
+
+function miniBtn(label, disabled, title, onClick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "provider-mini-btn";
+  b.textContent = label;
+  b.title = title;
+  b.disabled = !!disabled;
+  if (!disabled) b.addEventListener("click", onClick);
+  return b;
+}
+
+function fieldRow(label, value, placeholder, onChange) {
+  const row = document.createElement("div");
+  row.className = "provider-field";
+  const l = document.createElement("span");
+  l.className = "provider-field-label";
+  l.textContent = label;
+  const i = document.createElement("input");
+  i.type = "text";
+  i.className = "provider-input mono";
+  i.value = value || "";
+  i.placeholder = placeholder;
+  i.autocomplete = "off";
+  i.spellcheck = false;
+  i.addEventListener("change", () => onChange(i.value.trim()));
+  row.append(l, i);
+  return row;
+}
+
+// The key row: an input while unset, a "saved ✓ / edit" chip once stored.
+function keyRow(entry) {
+  const row = document.createElement("div");
+  row.className = "provider-field";
+  const label = document.createElement("span");
+  label.className = "provider-field-label";
+  label.textContent = "key";
+
+  const input = document.createElement("input");
+  input.type = "password";
+  input.className = "provider-input";
+  input.placeholder = "paste token";
+  input.autocomplete = "off";
+
+  const chip = document.createElement("span");
+  chip.className = "key-status";
+  chip.innerHTML = '<span class="key-saved-check">✓</span> saved <a class="link">edit</a>';
+
+  const show = (saved) => {
+    chip.style.display = saved ? "inline-flex" : "none";
+    input.style.display = saved ? "none" : "block";
+    input.value = "";
+  };
+  chip.querySelector(".link").addEventListener("click", () => { show(false); input.focus(); });
+
+  async function save() {
+    const key = input.value.trim();
+    if (!key) return;
+    try {
+      await invoke("set_provider_key", { id: entry.id, key });
+      show(true);
+      setStatus("Key saved", "done");
+    } catch (err) { setStatus(`Couldn't save key: ${err}`, "error"); }
+  }
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); });
+  input.addEventListener("blur", save);
+
+  show(!!entry.has_key);
+  row.append(label, input, chip);
+  return row;
+}
+
+// One entry: header (name + reorder/remove) over endpoint, model and key.
+function providerCard(entry, index, total) {
+  const card = document.createElement("div");
+  card.className = "provider-card";
+
+  const head = document.createElement("div");
+  head.className = "provider-head";
+  const name = document.createElement("span");
+  name.className = "provider-name";
+  name.textContent = entry.label || "custom";
+  if (index === 0) {
+    const tag = document.createElement("span");
+    tag.className = "provider-primary-tag";
+    tag.textContent = "first";
+    name.appendChild(tag);
+  }
+  head.appendChild(name);
+
+  const ctrls = document.createElement("div");
+  ctrls.className = "provider-ctrls";
+  ctrls.appendChild(miniBtn("↑", index === 0, "Move up (runs earlier)", async () => {
+    await invoke("move_provider", { id: entry.id, up: true });
+    renderStack();
+  }));
+  ctrls.appendChild(miniBtn("↓", index === total - 1, "Move down", async () => {
+    await invoke("move_provider", { id: entry.id, up: false });
+    renderStack();
+  }));
+  const del = miniBtn("✕", false, "Remove", async () => {
+    await invoke("remove_provider", { id: entry.id });
+    renderStack();
+  });
+  del.classList.add("provider-del");
+  ctrls.appendChild(del);
+  head.appendChild(ctrls);
+  card.appendChild(head);
+
+  card.appendChild(fieldRow("endpoint", entry.url, "https://…/v1/chat/completions", (v) =>
+    invoke("set_provider_field", { id: entry.id, field: "url", value: v })
+  ));
+  card.appendChild(fieldRow("model", entry.model, "model id", (v) =>
+    invoke("set_provider_field", { id: entry.id, field: "model", value: v })
+  ));
+  card.appendChild(keyRow(entry));
+  return card;
+}
+
+async function renderStack() {
+  const container = $("#provider-stack");
+  const cfg = await invoke("get_config");
+  const entries = cfg.providers || [];
+  container.innerHTML = "";
+
+  // Surface an active fallback: an outage the user can't see is an outage they
+  // blame on Quill.
+  const st = cfg.fallback_state;
+  if (st) {
+    const line = document.createElement("div");
+    line.className = "fallback-status";
+    const mins = Math.max(1, Math.ceil((st.remaining_secs || 0) / 60));
+    const active = entries[st.active];
+    const who = active ? (active.label || active.url) : `#${st.active + 1}`;
+    line.textContent = `⚡ running on ${who} (#${st.active + 1} of ${st.total}) · first choice retried in ~${mins} min`;
+    container.appendChild(line);
+  }
+
+  entries.forEach((e, i) => container.appendChild(providerCard(e, i, entries.length)));
+
+  const add = document.createElement("div");
+  add.className = "provider-add";
+  const sel = document.createElement("select");
+  sel.innerHTML = '<option value="" disabled selected>+ add model</option>';
+  for (const p of await loadCatalog()) {
     const opt = document.createElement("option");
     opt.value = p.name;
     opt.textContent = p.label;
-    if (p.name === currentProvider) opt.selected = true;
     sel.appendChild(opt);
   }
-  reflectKeyState(currentProvider, providerKeys);
-}
+  sel.insertAdjacentHTML("beforeend", '<option value="custom">custom…</option>');
+  sel.addEventListener("change", async () => {
+    if (!sel.value) return;
+    try { await invoke("add_provider", { provider: sel.value }); renderStack(); }
+    catch (err) { setStatus(`Couldn't add model: ${err}`, "error"); }
+  });
+  add.appendChild(sel);
+  container.appendChild(add);
 
-function reflectKeyState(provider, providerKeys) {
-  const has = providerKeys && providerKeys[provider];
-  $("#key-saved").style.display = has ? "inline-flex" : "none";
-  $("#key-input").style.display = has ? "none" : "block";
-  $("#key-input").value = "";
-}
-
-async function refreshConfig() {
-  const cfg = await invoke("get_config");
-  await loadProviders(cfg.llm_provider, cfg.llm_provider_keys);
   return cfg;
 }
 
@@ -172,39 +319,24 @@ async function setupUpdates() {
 // --- Init (called once by editor.js when the window loads) ---
 
 export async function initSettings() {
-  // Provider switch
-  $("#provider-select").addEventListener("change", async (e) => {
-    const provider = e.target.value;
-    try {
-      await invoke("set_llm_provider", { provider });
-      await refreshConfig();
-    } catch (err) { setStatus(`Couldn't switch model: ${err}`, "error"); }
-  });
-
-  // API key save
-  const keyInput = $("#key-input");
-  async function saveKey() {
-    const key = keyInput.value.trim();
-    if (!key) return;
-    const provider = $("#provider-select").value;
-    try {
-      await invoke("set_api_key", { key, provider });
-      await refreshConfig();
-      setStatus("Key saved", "done");
-    } catch (err) { setStatus(`Couldn't save key: ${err}`, "error"); }
-  }
-  keyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") saveKey(); });
-  keyInput.addEventListener("blur", saveKey);
-  $("#key-edit").addEventListener("click", () => {
-    $("#key-saved").style.display = "none";
-    keyInput.style.display = "block";
-    keyInput.focus();
-  });
-
   // (The Debug log button/back are wired in editor.js — it owns view switching.)
 
   // Initial state
-  const cfg = await refreshConfig();
+  const cfg = await renderStack();
+
+  // Fallback knobs: how stubborn we are with a failing model, and how long
+  // before the first choice gets another chance.
+  const fbThreshold = $("#fb-threshold");
+  const fbCooldown = $("#fb-cooldown");
+  fbThreshold.value = cfg.fallback_threshold;
+  fbCooldown.value = cfg.fallback_cooldown_mins;
+  fbThreshold.addEventListener("change", () =>
+    invoke("set_fallback_threshold", { value: parseInt(fbThreshold.value, 10) || 2 })
+  );
+  fbCooldown.addEventListener("change", () =>
+    invoke("set_fallback_cooldown", { minutes: parseInt(fbCooldown.value, 10) || 60 })
+  );
+
   $("#shortcut-display").textContent = pretty(await invoke("get_shortcut"));
   setupShortcutCapture();
   await setupUpdates();
