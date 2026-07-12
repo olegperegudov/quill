@@ -3,6 +3,31 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.29 — the window stops rubber-banding
+
+**Was.** A two-finger swipe anywhere in the window elastically dragged the whole
+page: the app "skin" slid inside its own frame and bared what sat behind the
+window. Since the window is borderless + `transparent: true` (that's what gives
+the rounded macOS corners), the exposed strip showed the desktop — read as white
+gaps along the edges. WKWebView rubber-bands the document by default; nothing in
+the CSS forbade it. CopyPaster already had the guard, Quill and Ribbit never got
+it.
+
+**Now.** `html, body` are pinned — `height: 100%`, `overflow: hidden`,
+`overscroll-behavior: none` — so the document can neither scroll nor bounce. The
+three scroll regions (`.log`, `.view-panel`, `#debug-content`) get
+`overscroll-behavior: contain`, so hitting the end of a list doesn't chain the
+gesture up to the document.
+
+**Tests.** `src/window_chrome.test.js` reads `editor.css` and fails if the root
+block or any scroller loses its rule — the bug itself only reproduces on a real
+macOS build, so the CSS is pinned instead of eyeballed. `npm test` 9 pass.
+Settings screenshotted after the change: layout unchanged.
+
+**Elsewhere.** Same guard applied to Ribbit; the `vibe-apps` skill now carries the
+root block as a copy-paste baseline plus a "what must never happen" checklist for
+new apps.
+
 ## 0.1.28 — model stack: endpoint + model per card, Groq, auto-fallback
 
 **Was.** The settings "Model" dropdown picked a *provider*, not a model: base url
