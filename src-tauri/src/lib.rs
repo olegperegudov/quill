@@ -692,6 +692,13 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
 
+            // macOS: menu-bar accessory (no Dock icon, no Cmd-Tab) — same as
+            // Ribbit. Quill is summoned by a hotkey and gets out of the way; a
+            // regular app also activates itself when its window shows, and that
+            // pulls focus off the text being corrected.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             // System tray
             let show = MenuItemBuilder::with_id("show", "Show Quill").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Quill").build(app)?;

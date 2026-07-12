@@ -3,6 +3,18 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## 0.1.30 — no Dock icon
+
+**Was.** Quill showed up in the Dock and in Cmd-Tab like a regular app, unlike
+Ribbit and CopyPaster. Nothing chose that: it is what macOS does by default, and
+the one line that says otherwise was never added here. Beyond the clutter, a
+regular app *activates itself* when its window appears — pulling focus off the
+text the user is correcting, which is exactly what Quill must not do.
+
+**Now.** `ActivationPolicy::Accessory` in `setup()` (macOS-only), same as Ribbit:
+menu-bar utility, no Dock icon, no Cmd-Tab entry. The tray icon is how you reach
+it, as before.
+
 ## 0.1.29 — the window stops rubber-banding
 
 **Was.** A two-finger swipe anywhere in the window elastically dragged the whole
