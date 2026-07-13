@@ -5,6 +5,8 @@ enough to understand *what* changed and *why* without digging through diffs.
 
 ## Unreleased
 
+**The pixel feather replaces the generic glyph.** The old icon was a white feather on a purple squircle — a plate, where the frog and the parrot are cut out on transparency. The new one is the pixel-art feather from the same set as the other two beasts, background removed by luminance with the dark backdrop unmultiplied out of the soft edge (no grey halo), and the whole `icons/` set regenerated from it. The same file is the app's face in the README. `tray-update.png` carries the green badge top-right, as everywhere; the feather stands down to 88% there so its tip does not end up under the dot.
+
 **Security pass across the three apps.**
 
 - **The dev-only key bootstrap is gone.** A release build read `~/membeme/system/secrets/routerai.key` on startup and seeded the key from it — a personal path baked into a public binary, and dev behaviour that had no business shipping. The key is pasted in the settings panel, like every other one.
