@@ -5,6 +5,8 @@ enough to understand *what* changed and *why* without digging through diffs.
 
 ## Unreleased
 
+**The README shows the app instead of describing it.** Two screenshots, taken by the harness (`_quill_shot.mjs`, now with `SHOT=chat|providers` like Ribbit's): the chat with a real English and a real Russian correction plus an "already clean" pair, and the model stack with the fallback knobs. Prose in both feature sections cut to two lines each.
+
 **The pen in the menu bar carries the update, like the frog and the parrot.** A left click on the tray icon now opens a menu — *Check for updates*, *Show Quill*, the version, *Quit* — instead of toggling the window. The one update item turns into "Update to vX.Y.Z" once a release is found, and the tray icon takes a green badge (`icons/tray-update.png`); a test fails if that icon ever ships without its `#2ecc71` pixels.
 
 The update button is gone from the settings panel, and so is the glowing gear: the tray is visible all day, the settings panel is opened about once a month. `check_for_update` / `install_update` are no longer commands — nothing in the window asks for them. The background poll calls the same `announce_update()` as the manual check, so a release found either way gives the same signal.

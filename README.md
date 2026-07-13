@@ -32,13 +32,17 @@ Then:
 
 Quill is built and used on macOS. The Windows build exists and installs, but it isn't tested nearly as much — expect rough edges.
 
-## What it does, and what it doesn't
+## Fixes the mistakes, keeps your voice
 
-It fixes mistakes. It does not rewrite you — tone, register and word choices survive. Nothing selected, or nothing wrong with it? Quill does nothing. Your clipboard is borrowed for a split second to read the selection, then put back exactly as it was.
+Tone, register and word choices survive — only the errors go. Nothing wrong with the text? Quill says so and leaves it alone. Every correction stays in a small chat; click any bubble to copy it.
 
-## Never wait on one provider
+![The chat with two corrections](docs/screenshots/chat.png)
 
-Add as many models as you like: the top one does the work, the rest wait for the day it doesn't. After enough failures in a row — rate limit, outage, timeout — Quill drops to the next one, then climbs back to the top once the cooldown passes. Both numbers are yours. Reorder with ↑/↓, or point a card at your own endpoint.
+## Never wait on one model
+
+Add as many as you like: the top one does the work, the rest wait for the day it doesn't. After enough failures in a row — rate limit, outage, timeout — Quill drops to the next one, then climbs back to the top once the cooldown passes. Both numbers are yours.
+
+![The model stack and the fallback knobs](docs/screenshots/providers.png)
 
 ## Updates
 
