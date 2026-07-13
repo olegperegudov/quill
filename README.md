@@ -2,120 +2,57 @@
   <img src="src/quill.png" width="96" alt="Quill logo" />
 </p>
 
-<h1 align="center">Quill ✒</h1>
+<h1 align="center">Quill</h1>
 
 <p align="center">
-  Polish your writing in place, in any app, on Windows and macOS.<br/>
-  Select text, press a hotkey — spelling, punctuation and grammar fixed, your meaning untouched.
-</p>
-
-<p align="center">
-  <i>Highlight the mess, then tap the key —<br/>
-  Quill tidies the typos quietly.<br/>
-  Your tone, your words, your meaning stay,<br/>
-  just the slips and commas swept away.</i> ✒
+  Clean up your writing without leaving the window you're in.<br/>
+  Select the text, press a hotkey — spelling, punctuation and grammar fixed, your meaning untouched.
 </p>
 
 <p align="center">
-  <b>Russian and English</b> — language detected automatically, never translated<br/>
-  <b>Private by design</b> — text goes only to your chosen model, history stays local, no telemetry
+  <b>Russian and English</b> — the language is detected, never translated<br/>
+  <b>Yours</b> — the text goes only to the model you picked, history stays local, no telemetry
 </p>
 
-## How it works
+## Get it
 
-1. **Select** text in any app — a chat, an email, Jira, a browser form
-2. Press the hotkey — **⌃⌥E** on macOS, **Ctrl + Alt + E** on Windows (customizable)
-3. Quill sends the selection to an LLM that fixes spelling, punctuation and grammar — without changing your meaning or tone
-4. The corrected text is typed back **over your selection**
-
-No window to switch to, no copy-paste. If nothing is selected, or the text is already clean, Quill does nothing. Your clipboard is borrowed for a split second to read the selection, then restored exactly as it was.
-
-## Quick start
-
-### 1. Download
-
-<p>
-  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_Windows_Setup.exe"><img src="https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>&nbsp;
-  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_macOS_AppleSilicon.dmg"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Apple_Silicon-000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Apple Silicon" /></a>&nbsp;
-  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_macOS_Intel.dmg"><img src="https://img.shields.io/badge/macOS_%E2%80%93_Intel-666?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS Intel" /></a>
+<p align="center">
+  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_macOS_AppleSilicon.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-Apple_Silicon-000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS, Apple Silicon" /></a>&nbsp;
+  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_macOS_Intel.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-Intel-666?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS, Intel" /></a>&nbsp;
+  <a href="https://github.com/olegperegudov/quill/releases/latest/download/Quill_Windows_Setup.exe"><img src="https://img.shields.io/badge/Download_for-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" /></a>
 </p>
 
-Each button downloads the right installer for that platform directly — no picking from a list. (Want to choose yourself or grab an older build? The [Releases](https://github.com/olegperegudov/quill/releases/latest) page lists every file.)
+Each button downloads the latest installer for that platform. Want an older build? Every version is on the [releases page](https://github.com/olegperegudov/quill/releases).
 
-On macOS the app isn't notarized (no paid Apple Developer account), so on the **first** open macOS will call it *"damaged"*. It isn't — that's just how macOS treats unsigned downloads on Apple Silicon. Clear it once in Terminal:
+Then:
 
-```bash
-xattr -cr /Applications/Quill.app
-```
+1. **Open it.** Apple isn't paid to trust us, so the first launch claims the app is *"damaged"*. It isn't — run `xattr -cr /Applications/Quill.app` once in Terminal, then open it normally. Updates after that install themselves. You'll also be asked for **Accessibility**, once: that's how Quill reads what you selected.
+2. **Paste a key.** Any OpenAI-compatible model will do — [Groq](https://console.groq.com/keys) (the default, and fast), [RouterAI](https://routerai.ru), [OpenAI](https://platform.openai.com/api-keys), [OpenRouter](https://openrouter.ai/keys). A correction is a tiny request; this costs pennies.
+3. **Select text anywhere, press ⌃⌥E.** The fixed version comes back in a small chat at your cursor — click it to copy. On Windows: `Ctrl+Alt+E`.
 
-then open Quill normally. You won't hit this again — later updates install themselves through the app and aren't flagged. On first use you'll also be asked to grant **Accessibility** — Quill needs it to read your selection and type the correction back.
+Quill is built and used on macOS. The Windows build exists and installs, but it isn't tested nearly as much — expect rough edges.
 
-### 2. Get an API key
+## What it does, and what it doesn't
 
-Quill talks to any OpenAI-compatible model. Pick one provider and get its key:
+It fixes mistakes. It does not rewrite you — tone, register and word choices survive. Nothing selected, or nothing wrong with it? Quill does nothing. Your clipboard is borrowed for a split second to read the selection, then put back exactly as it was.
 
-- [**Groq**](https://console.groq.com/keys) (default — LPU-fast Llama) · [**RouterAI**](https://routerai.ru) · [**OpenAI**](https://platform.openai.com/api-keys) · [**OpenRouter**](https://openrouter.ai/keys)
+## Never wait on one provider
 
-Grammar fixes are tiny requests, so this costs pennies.
+Add as many models as you like: the top one does the work, the rest wait for the day it doesn't. After enough failures in a row — rate limit, outage, timeout — Quill drops to the next one, then climbs back to the top once the cooldown passes. Both numbers are yours. Reorder with ↑/↓, or point a card at your own endpoint.
 
-### 3. Paste the key into Quill
+## Updates
 
-Open Quill (it lives in the menu-bar / tray), hit the gear, and paste the key into the model card. It's stored in a private file on your machine. Done — select some text anywhere and hit the hotkey.
-
-### 4. Add a backup (optional)
-
-Under **Models**, hit **+ add model** for a second provider. The top card runs first; if it hits a rate limit or goes down, the next one takes over — the correction you're waiting on still lands. Reorder with ↑/↓, edit any endpoint or model id inline, or pick *custom…* for a self-hosted endpoint.
-
-## Features
-
-- **Fix in place** — highlight text in any app, press the hotkey, corrected text replaces it
-- **Bilingual** — Russian and English, detected automatically, never translated
-- **Keeps your voice** — fixes errors, never rewrites your meaning, tone or register
-- **Works everywhere** — global hotkey from any app (desktop messengers, browser, mail), even when minimized to tray
-- **Leaves your clipboard alone** — inserts by typing; the clipboard is only read, then restored
-- **Local history** — see exactly what changed (original → corrected); retention is configurable
-- **Key in the OS keychain** — not a plaintext file
-- **System tray** — runs quietly in the background, X hides to tray
-- **Auto-update** — checks on its own, one-click install from the window
-- **Customizable hotkey** — click the hotkey, press your combo
+The pen in the menu bar turns green when a new version is out. Click it, pick the update line — done.
 
 ## Privacy
 
-- Selected text is sent to **your chosen provider** for correction only — nothing else leaves your machine
-- Your API key is stored in the **OS keychain** (macOS Keychain / Windows Credential Manager)
-- Correction history is stored locally and pruned to your retention window; it never leaves your machine
-- No analytics, no tracking, no telemetry — the only network call is to the model you picked
-- Fully open source — inspect every line
+- The selection goes to the model you picked, for correction, and nowhere else.
+- Your key lives in a private file on your machine; the history of corrections never leaves it.
+- No analytics, no tracking, no other network calls.
 
-## Settings
+## Under the hood
 
-| Setting | Description |
-|---------|-------------|
-| **Models** | Your model stack — endpoint, model id and key per card. The top card runs, the rest are backups |
-| **Fall back** | How many consecutive failures flip Quill to the backup, and how long before it retries the first card |
-| **API key** | Per card — stored in a private (0600) file on your machine |
-| **Hotkey** | Click to customize, press your combo |
-| **Debug log** | View internal logs for troubleshooting |
-| **Version** | Click to view the changelog |
-| **Check update** | Manually check for a new version |
-
-## Tech stack
-
-- [Tauri 2](https://tauri.app/) — Rust backend, HTML/CSS/JS frontend
-- OpenAI-compatible chat completions — Groq / RouterAI / OpenAI / OpenRouter, or any custom endpoint
-- [Enigo](https://github.com/enigo-rs/enigo) — synthetic keyboard input (copy + type)
-- [arboard](https://github.com/1Password/arboard) — read the selection from the clipboard
-- [keyring](https://github.com/hwchen/keyring-rs) — API key in the OS keychain
-
-## Building from source
-
-```bash
-# Prerequisites: Node.js, Rust toolchain
-npm install
-npm run tauri build
-```
-
-The installer lands in `src-tauri/target/release/bundle/`.
+Stack, local build, tests, signing and the release pipeline → [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 

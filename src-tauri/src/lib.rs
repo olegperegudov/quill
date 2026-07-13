@@ -34,10 +34,19 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     AppHandle, Emitter, Manager,
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::TrayIconBuilder,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_updater::UpdaterExt;
+
+/// Menu-bar icon tinted green while an update is waiting — the same signal
+/// Ribbit and CopyPaster give, so the three apps behave alike.
+const TRAY_UPDATE_ICON: &[u8] = include_bytes!("../icons/tray-update.png");
+
+/// The tray's update item, kept reachable so `announce_update` can rewrite it.
+/// A newtype because Tauri keys managed state by type, and the "Show Quill"
+/// item already occupies plain `MenuItem<Wry>`.
+struct UpdateItem(tauri::menu::MenuItem<tauri::Wry>);
 
 const BUNDLE_ID: &str = "com.quill.app";
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
@@ -264,54 +273,71 @@ fn get_debug_log() -> String {
     }
 }
 
-#[tauri::command]
-async fn check_for_update(app: AppHandle) -> Result<serde_json::Value, String> {
+/// Looks for a release and, if one is there, lights the tray. Not a command any
+/// more: updating lives in the menu-bar menu, so the window never asks for it.
+async fn check_for_update(app: &AppHandle) -> Result<Option<String>, String> {
     let updater = app.updater().map_err(|e| e.to_string())?;
     match updater.check().await {
         Ok(Some(update)) => {
             let version = update.version.clone();
-            let body = update.body.clone().unwrap_or_default();
-            debug_log::log(&format!("Update available: v{}", version));
-            let _ = app.emit("update-available", &version);
-            Ok(serde_json::json!({ "available": true, "version": version, "body": body }))
+            debug_log::log(&format!("update: v{} available", version));
+            announce_update(app, &version);
+            Ok(Some(version))
         }
         Ok(None) => {
-            debug_log::log("No update available");
-            Ok(serde_json::json!({ "available": false }))
+            debug_log::log("update: up to date");
+            Ok(None)
         }
         Err(e) => {
-            debug_log::log(&format!("Update check failed: {}", e));
+            debug_log::log(&format!("update: check failed: {}", e));
             Err(e.to_string())
         }
     }
 }
 
-#[tauri::command]
-async fn install_update(app: AppHandle) -> Result<(), String> {
+async fn install_update(app: &AppHandle) -> Result<(), String> {
     let updater = app.updater().map_err(|e| e.to_string())?;
     match updater.check().await {
         Ok(Some(update)) => {
-            debug_log::log(&format!("Downloading update v{}...", update.version));
-            let mut downloaded: u64 = 0;
-            let app_for_event = app.clone();
+            debug_log::log(&format!("update: downloading v{}", update.version));
             update
-                .download_and_install(
-                    move |chunk, total| {
-                        downloaded += chunk as u64;
-                        let progress = total.map(|t| (downloaded as f64 / t as f64 * 100.0) as u32);
-                        let _ = app_for_event.emit("update-progress", progress.unwrap_or(0));
-                    },
-                    || debug_log::log("Update downloaded, restarting..."),
-                )
+                .download_and_install(|_, _| {}, || debug_log::log("update: downloaded, restarting"))
                 .await
                 .map_err(|e| {
-                    debug_log::log(&format!("Update install failed: {}", e));
+                    debug_log::log(&format!("update: install failed: {}", e));
                     e.to_string()
                 })?;
             app.restart();
         }
         Ok(None) => Err("No update available".into()),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Light the menu-bar icon green and turn the menu's update item into the
+/// install action. Called from both the manual check and the background poll —
+/// one place, so a release found either way gives the user the same signal.
+fn announce_update(app: &AppHandle, version: &str) {
+    if let Some(item) = app.try_state::<UpdateItem>() {
+        let _ = item.0.set_text(format!("Update to v{}", version));
+    }
+    if let Some(tray) = app.tray_by_id("tray") {
+        if let Ok(icon) = tauri::image::Image::from_bytes(TRAY_UPDATE_ICON) {
+            let _ = tray.set_icon(Some(icon));
+        }
+    }
+}
+
+/// One menu item, two jobs: check while nothing is pending, install once a
+/// version has been found. Two items would leave a dead "Check" sitting next to
+/// a live "Update".
+async fn on_update_clicked(app: AppHandle) {
+    match check_for_update(&app).await {
+        Ok(Some(_)) => {
+            let _ = install_update(&app).await;
+        }
+        Ok(None) => debug_log::log("update: nothing to install"),
+        Err(e) => debug_log::log(&format!("update: check failed: {}", e)),
     }
 }
 
@@ -680,8 +706,6 @@ pub fn run() {
             js_debug_log,
             get_shortcut,
             set_shortcut,
-            check_for_update,
-            install_update,
             get_current_version,
             editor_correct,
             copy_to_clipboard,
@@ -699,34 +723,43 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            // System tray
+            // System tray. A left click opens the menu — same as Ribbit and
+            // CopyPaster, so "click the animal, get a menu" holds everywhere.
+            // The update line is the only place updating lives; the window has
+            // no button for it.
+            let update = MenuItemBuilder::with_id("update", "Check for updates").build(app)?;
             let show = MenuItemBuilder::with_id("show", "Show Quill").build(app)?;
+            let version = MenuItemBuilder::with_id("version", format!("Quill v{}", env!("CARGO_PKG_VERSION")))
+                .enabled(false)
+                .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Quill").build(app)?;
-            let menu = MenuBuilder::new(app).item(&show).item(&quit).build()?;
+            let menu = MenuBuilder::new(app)
+                .item(&update)
+                .separator()
+                .item(&show)
+                .separator()
+                .item(&version)
+                .item(&quit)
+                .build()?;
 
             let show_for_menu = show.clone();
-            let show_for_tray = show.clone();
+            // announce_update() rewrites this item's text when a release lands.
+            app.manage(UpdateItem(update.clone()));
 
             let mut tray_builder = TrayIconBuilder::with_id("tray")
                 .tooltip("Quill — polish your writing")
                 .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(move |app, event| {
-                    if event.id() == "show" {
-                        toggle_chat_window(app, &show_for_menu);
-                    } else if event.id() == "quit" {
-                        app.exit(0);
+                .show_menu_on_left_click(true)
+                .on_menu_event(move |app, event| match event.id().as_ref() {
+                    "update" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            on_update_clicked(app).await;
+                        });
                     }
-                })
-                .on_tray_icon_event(move |tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        toggle_chat_window(tray.app_handle(), &show_for_tray);
-                    }
+                    "show" => toggle_chat_window(app, &show_for_menu),
+                    "quit" => app.exit(0),
+                    _ => {}
                 });
 
             if let Some(icon) = app.default_window_icon() {
@@ -776,17 +809,10 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                 loop {
-                    match update_handle.updater() {
-                        Ok(updater) => match updater.check().await {
-                            Ok(Some(update)) => {
-                                debug_log::log(&format!("update: v{} available", update.version));
-                                let _ = update_handle.emit("update-available", &update.version);
-                                break;
-                            }
-                            Ok(None) => debug_log::log("update: up to date"),
-                            Err(e) => debug_log::log(&format!("update: auto-check failed: {}", e)),
-                        },
-                        Err(e) => debug_log::log(&format!("update: auto-check error: {}", e)),
+                    // Found one → the tray is already lit and the menu item says
+                    // "Update to vX"; nothing left to poll for.
+                    if let Ok(Some(_)) = check_for_update(&update_handle).await {
+                        break;
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
                 }
@@ -802,6 +828,15 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The update signal is the icon itself — ship the plain pen by mistake and
+    /// the user never learns an update is waiting, silently and forever.
+    #[test]
+    fn the_update_icon_carries_the_green_badge() {
+        let icon = tauri::image::Image::from_bytes(TRAY_UPDATE_ICON).expect("tray-update.png decodes");
+        let badge = icon.rgba().chunks(4).any(|px| (px[0], px[1], px[2], px[3]) == (46, 204, 113, 255));
+        assert!(badge, "no #2ecc71 pixels — is this the plain icon?");
+    }
 
     #[test]
     fn seed_stack_is_groq_first_backup_second() {

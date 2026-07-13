@@ -9,7 +9,6 @@
 import { shortcutFromEvent, prettyShortcut } from "./shortcut.js";
 
 const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -261,59 +260,10 @@ function setupShortcutCapture() {
   });
 }
 
-// --- Update flow (Ribbit-style: the button shows the percent and installs;
-//     the chat's gear is what glows when one is waiting) ---
-
+// Updating lives entirely in the menu-bar menu — the window only names the
+// running version.
 async function setupUpdates() {
   $("#version").textContent = "v" + (await invoke("get_current_version"));
-  const btn = $("#update-btn");
-
-  function setIdle() {
-    btn.textContent = "check update";
-    btn.classList.remove("update-available");
-    btn.disabled = false;
-    btn.onclick = check;
-  }
-
-  // Arm the button to install `version` on the next click.
-  function arm(version) {
-    btn.textContent = `update to v${version}`;
-    btn.classList.add("update-available");
-    btn.disabled = false;
-    btn.onclick = () => install(version);
-  }
-
-  async function check() {
-    btn.textContent = "checking…";
-    btn.disabled = true;
-    try {
-      const res = await invoke("check_for_update");
-      if (res.available) arm(res.version);
-      else { btn.textContent = "up to date"; setTimeout(setIdle, 2500); }
-    } catch (err) {
-      btn.textContent = "check failed";
-      setStatus(`Update check failed: ${err}`, "error");
-      setTimeout(setIdle, 2500);
-    }
-  }
-
-  // Download + install takes 20-30s and ends with the app restarting itself.
-  // The percentage rides on the button only (Ribbit-style) — one place, not two.
-  async function install(version) {
-    btn.textContent = "downloading…";
-    btn.disabled = true;
-    try {
-      await invoke("install_update"); // on success the app restarts — no return
-    } catch (err) {
-      btn.textContent = "update failed";
-      setTimeout(() => arm(version), 2500); // let them retry
-    }
-  }
-
-  setIdle();
-  // Rust finds a release in the background → arm install (the chat's gear glows).
-  await listen("update-available", (e) => arm(e.payload));
-  await listen("update-progress", (e) => { btn.textContent = `downloading ${e.payload}%`; });
 }
 
 // --- Init (called once by editor.js when the window loads) ---

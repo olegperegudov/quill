@@ -86,16 +86,6 @@ body {
 .win-btn.active { background: var(--panel-2); color: var(--ink); }
 .win-close:hover { background: #5b2330; color: #ffb4b4; }
 
-/* The gear glows when an update is waiting (install button is in settings). */
-.win-btn.update-available {
-  color: var(--good);
-  animation: gear-pulse 1.8s ease-in-out infinite;
-}
-@keyframes gear-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
-
 /* Conversation -------------------------------------------------------- */
 .log {
   flex: 1;
@@ -328,6 +318,9 @@ body {
 }
 .setting-label { font-size: 0.82rem; color: var(--muted); flex-shrink: 0; }
 #version { color: var(--muted); }
+/* Where updating went, said once and quietly. Muted, not accent — it is a note,
+   and an accent-coloured line here reads as a button that does nothing. */
+.setting-hint { font-size: 0.72rem; color: var(--muted); opacity: 0.75; }
 
 /* Provider stack ------------------------------------------------------ */
 /* The "Models" block: one card per provider, in priority order. It sits in the
@@ -495,15 +488,6 @@ kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(91
 }
 .ghost:hover { border-color: var(--ink-dim); color: var(--text); }
 .ghost:disabled { opacity: 0.5; cursor: default; }
-.ghost.update-available {
-  color: var(--good);
-  border-color: rgba(74, 222, 128, 0.5);
-  animation: update-pulse 2s ease-in-out infinite;
-}
-@keyframes update-pulse {
-  0%, 100% { color: var(--good); }
-  50% { color: #22c55e; }
-}
 
 .view-panel::-webkit-scrollbar { width: 6px; }
 .view-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }

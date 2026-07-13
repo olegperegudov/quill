@@ -3,6 +3,14 @@
 Engineering release notes. Primary reader: future Claude. Detailed on purpose —
 enough to understand *what* changed and *why* without digging through diffs.
 
+## Unreleased
+
+**The pen in the menu bar carries the update, like the frog and the parrot.** A left click on the tray icon now opens a menu — *Check for updates*, *Show Quill*, the version, *Quit* — instead of toggling the window. The one update item turns into "Update to vX.Y.Z" once a release is found, and the tray icon takes a green badge (`icons/tray-update.png`); a test fails if that icon ever ships without its `#2ecc71` pixels.
+
+The update button is gone from the settings panel, and so is the glowing gear: the tray is visible all day, the settings panel is opened about once a month. `check_for_update` / `install_update` are no longer commands — nothing in the window asks for them. The background poll calls the same `announce_update()` as the manual check, so a release found either way gives the same signal.
+
+**The README is a shop window, not a manual.** Same shape as Ribbit and CopyPaster now: three fat download buttons at the top, the "older versions" link pointing at `/releases` (every version — so a bad build can be rolled back) rather than `/releases/latest` (one release and its files), and the stack / build / tests / signing moved to `docs/DEVELOPMENT.md`. The old page also claimed the API key lives in the OS keychain — it lives in a private 0600 file, and `secrets.rs` explains at length why that was deliberate.
+
 ## 0.1.30 — no Dock icon
 
 **Was.** Quill showed up in the Dock and in Cmd-Tab like a regular app, unlike

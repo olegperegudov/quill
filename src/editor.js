@@ -265,13 +265,8 @@ listen("editor:need-access", () => {
   );
 });
 
-// An update is waiting — light the gear so it's noticeable; the install button
-// itself lives in settings.
-listen("update-available", () => {
-  const gear = $("#settings-btn");
-  gear.classList.add("update-available");
-  gear.title = "Update available — open settings";
-});
+// An update waiting is announced on the menu-bar icon (green pen + an install
+// line in its menu). The window says nothing about it.
 
 // Bring up history + wire settings. On first run (no API key yet) land on the
 // settings view so the window the tray/hotkey reveals isn't a dead end — Rust
