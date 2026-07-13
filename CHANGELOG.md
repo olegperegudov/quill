@@ -5,6 +5,14 @@ enough to understand *what* changed and *why* without digging through diffs.
 
 ## Unreleased
 
+**Security pass across the three apps.**
+
+- **The dev-only key bootstrap is gone.** A release build read `~/membeme/system/secrets/routerai.key` on startup and seeded the key from it — a personal path baked into a public binary, and dev behaviour that had no business shipping. The key is pasted in the settings panel, like every other one.
+- **Config, history and the session log are written owner-only (0600), folders 0700** — via the new `private.rs`, shared in shape with Ribbit and CopyPaster. `secrets.rs` used to write the key and *then* chmod it, leaving a window where the token was on disk and world-readable; the mode is now set on the open handle before the key goes in.
+- **A provider endpoint must be `https://`** — an `http://` endpoint sent the API key across the network in the clear on every correction. Refused when typed, with a test.
+- **Content-Security-Policy is set** (`default-src 'self'`; no remote script, image or connection). Quill's frontend never touches the network — Rust does — so an injected script has nowhere to send the selection or the key. Checked against the real policy in a headless webview: no violations.
+- **Every GitHub action is pinned to a commit SHA**, and the updater signing key reaches only the step that signs. Dependabot watches the pins. These jobs hold the key that signs auto-updates.
+
 **The README shows the app instead of describing it.** Two screenshots, taken by the harness (`_quill_shot.mjs`, now with `SHOT=chat|providers` like Ribbit's): the chat with a real English and a real Russian correction plus an "already clean" pair, and the model stack with the fallback knobs. Prose in both feature sections cut to two lines each.
 
 **The pen in the menu bar carries the update, like the frog and the parrot.** A left click on the tray icon now opens a menu — *Check for updates*, *Show Quill*, the version, *Quit* — instead of toggling the window. The one update item turns into "Update to vX.Y.Z" once a release is found, and the tray icon takes a green badge (`icons/tray-update.png`); a test fails if that icon ever ships without its `#2ecc71` pixels.

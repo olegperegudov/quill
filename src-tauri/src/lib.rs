@@ -26,6 +26,7 @@ mod debug_log;
 mod fallback;
 mod logger;
 mod mac_window;
+mod private;
 mod secrets;
 mod selection;
 mod tcc_reset;
@@ -170,11 +171,25 @@ fn remove_provider(id: String) -> Result<serde_json::Value, String> {
     Ok(stack_json(&config))
 }
 
+/// An endpoint is where the API key goes on every request. Over plain http the
+/// key crosses the network in the clear, so a non-https endpoint is refused when
+/// it is typed — refusing it at request time is too late, it has already been sent.
+fn require_https(url: &str) -> Result<(), String> {
+    let u = url.trim();
+    if u.is_empty() || u.starts_with("https://") {
+        return Ok(());
+    }
+    Err("endpoint must start with https:// — your key travels with every request".into())
+}
+
 /// Edit one editable field (url / model / label) of a stack entry.
 #[tauri::command]
 fn set_provider_field(id: String, field: String, value: String) -> Result<(), String> {
     if !matches!(field.as_str(), "url" | "model" | "label") {
         return Err(format!("field not editable: {}", field));
+    }
+    if field == "url" {
+        require_https(&value)?;
     }
     let mut config = read_config();
     let arr = config[fallback::CONFIG_KEY].as_array_mut().ok_or("no providers configured")?;
@@ -530,21 +545,6 @@ fn open_accessibility_settings() {
     }
 }
 
-/// On a dev machine where `~/membeme/system/secrets/routerai.key` exists, seed
-/// the RouterAI key into the config file on first launch. Quiet no-op otherwise.
-fn bootstrap_routerai_key() {
-    let Some(home) = dirs::home_dir() else { return };
-    let src = home.join("membeme/system/secrets/routerai.key");
-    let Ok(key) = std::fs::read_to_string(&src) else { return };
-    let key = key.trim();
-    if key.is_empty() {
-        return;
-    }
-    if secrets::save("ROUTERAI_API_KEY", key).is_ok() {
-        debug_log::log("bootstrapped ROUTERAI_API_KEY from ~/membeme/system/secrets/routerai.key");
-    }
-}
-
 /// Build a stack out of catalog names, in order. Unknown names are dropped
 /// rather than faked — a typo here must not silently produce a dead entry.
 fn seed_stack(names: &[&str]) -> serde_json::Value {
@@ -613,8 +613,8 @@ fn read_config() -> serde_json::Value {
 
 fn save_config(config: &serde_json::Value) -> Result<(), String> {
     let path = config_path().ok_or("Cannot find config directory")?;
-    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&path, serde_json::to_string_pretty(config).unwrap()).map_err(|e| e.to_string())
+    private::create_dir(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    private::write(&path, serde_json::to_string_pretty(config).unwrap().as_bytes()).map_err(|e| e.to_string())
 }
 
 /// Show/hide the chat from the tray — the chat *is* the app's face, so the tray
@@ -668,9 +668,6 @@ pub fn run() {
         .map(|e| e.key_env)
         .collect();
     secrets::load_into_env(&key_slots);
-    if std::env::var("ROUTERAI_API_KEY").is_err() {
-        bootstrap_routerai_key();
-    }
 
     // Warm the TLS handshake so the first correction isn't slow.
     std::thread::spawn(corrector::warm_up_client);
@@ -866,5 +863,24 @@ mod tests {
         });
         assert_eq!(next_provider_id(&cfg), "p5");
         assert_eq!(next_provider_id(&serde_json::json!({})), "p1");
+    }
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    use super::require_https;
+
+    #[test]
+    fn a_plain_http_endpoint_is_refused() {
+        assert!(require_https("http://api.example.com/v1").is_err(), "http would send the key in the clear");
+        assert!(require_https("ftp://api.example.com").is_err());
+        assert!(require_https("api.example.com").is_err(), "no scheme is not a scheme we trust");
+    }
+
+    #[test]
+    fn https_and_an_empty_field_are_fine() {
+        assert!(require_https("https://api.groq.com/openai/v1").is_ok());
+        assert!(require_https("  https://api.openai.com/v1 ").is_ok());
+        assert!(require_https("").is_ok(), "clearing the field is not an attack");
     }
 }

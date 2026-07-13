@@ -56,7 +56,7 @@ pub fn load_into_env(env_vars: &[String]) {
 /// Store a key in the config file and make it live in the current process.
 pub fn save(env_var: &str, key: &str) -> Result<(), String> {
     let path = env_path().ok_or("Cannot find config directory")?;
-    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    crate::private::create_dir(path.parent().unwrap()).map_err(|e| e.to_string())?;
 
     // Rewrite, replacing only this var's line; keep the rest untouched.
     let prefix = format!("{}=", env_var);
@@ -82,15 +82,9 @@ pub fn has_key(env_var: &str) -> bool {
 }
 
 /// Write the file owner-only (0600) so the token isn't readable by other users.
-#[cfg(unix)]
+/// The mode is set on the open handle, before the key goes in — writing first
+/// and chmod'ing after leaves a moment where the token is already on disk and
+/// still world-readable.
 fn write_private(path: &Path, body: &str) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::write(path, body).map_err(|e| e.to_string())?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-        .map_err(|e| e.to_string())
-}
-
-#[cfg(not(unix))]
-fn write_private(path: &Path, body: &str) -> Result<(), String> {
-    std::fs::write(path, body).map_err(|e| e.to_string())
+    crate::private::write(path, body.as_bytes()).map_err(|e| e.to_string())
 }
