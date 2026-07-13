@@ -562,7 +562,7 @@ Mechanics worth knowing for the next change:
   lands in a later phase). Styling mirrors the settings window's tokens.
 
 Still to come (later phases): live per-word underlines on what changed,
-click-a-word to see было→стало and accept/reject, select-a-chunk to rewrite, and
+click-a-word to see before→after and accept/reject, select-a-chunk to rewrite, and
 debounced re-checking as you type. This phase is the window + focus-return
 foundation only.
 
