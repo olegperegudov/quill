@@ -575,25 +575,41 @@ fn seed_stack(names: &[&str]) -> serde_json::Value {
 /// so the backup keeps working meanwhile and the update can't break a working
 /// install.
 fn migrate_providers() {
-    let mut cfg = read_config();
-    if cfg[fallback::CONFIG_KEY].is_array() {
-        return;
-    }
-    let legacy = cfg["llm_provider"].as_str().unwrap_or(corrector::DEFAULT_PROVIDER).to_string();
-    let backup = if corrector::find_provider(&legacy).is_some() && legacy != "groq" {
-        legacy
-    } else {
-        corrector::DEFAULT_PROVIDER.to_string()
-    };
-    cfg[fallback::CONFIG_KEY] = seed_stack(&["groq", &backup]);
+    let cfg = read_config();
+    let Some(migrated) = migrated_config(&cfg) else { return };
     // The old key stays in the same slot in the config file, so the backup entry
     // keeps working without the user re-pasting anything.
-    if let Err(e) = save_config(&cfg) {
-        debug_log::log(&format!("provider migration failed: {}", e));
-        return;
+    match save_config(&migrated) {
+        Ok(()) => debug_log::log("migrated config to the provider stack"),
+        Err(e) => debug_log::log(&format!("provider migration failed: {}", e)),
     }
-    debug_log::log(&format!("migrated config to provider stack (groq + {})", backup));
 }
+
+/// The migration itself, kept free of IO so it can be pinned by tests — this
+/// function rewrites the user's config on every launch, and "does it clobber a
+/// working install" is not something to find out in production.
+///
+/// `None` = the config already has a stack, leave it alone.
+fn migrated_config(cfg: &serde_json::Value) -> Option<serde_json::Value> {
+    if cfg[fallback::CONFIG_KEY].is_array() {
+        return None;
+    }
+    let legacy = cfg["llm_provider"].as_str().unwrap_or(corrector::DEFAULT_PROVIDER);
+    let backup = if corrector::find_provider(legacy).is_some() && legacy != "groq" {
+        legacy
+    } else {
+        corrector::DEFAULT_PROVIDER
+    };
+    let mut out = cfg.clone();
+    out[fallback::CONFIG_KEY] = seed_stack(&["groq", backup]);
+    Some(out)
+}
+
+/// Windows that hide on close instead of being destroyed. Every window the tray
+/// or the hotkey can raise belongs here — a destroyed one cannot be raised again.
+/// The test at the bottom of this file reads `tauri.conf.json` and fails if a
+/// window is declared there and missing here.
+const HIDE_ON_CLOSE: [&str; 1] = ["editor"];
 
 fn config_path() -> Option<std::path::PathBuf> {
     dirs::config_dir().map(|d| d.join("quill").join("config.json"))
@@ -604,11 +620,23 @@ fn history_days() -> i64 {
     read_config()["history_days"].as_i64().unwrap_or(7).clamp(1, 365)
 }
 
+/// A config we could not parse is set aside, not overwritten. Empty defaults look
+/// exactly like a fresh install to `migrate_providers`, which then re-seeds and
+/// saves — so a half-written file (a crash mid-save, a full disk) would silently
+/// take the provider stack, the endpoints and the keys with it. Keep the corpse:
+/// the user can open it and copy the endpoint back.
 fn read_config() -> serde_json::Value {
-    config_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(serde_json::json!({}))
+    let Some(path) = config_path() else { return serde_json::json!({}) };
+    let Ok(raw) = std::fs::read_to_string(&path) else { return serde_json::json!({}) };
+    match serde_json::from_str(&raw) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            let kept = path.with_extension("broken.json");
+            let _ = std::fs::rename(&path, &kept);
+            debug_log::log(&format!("config unreadable ({}), kept as {:?}", e, kept.file_name()));
+            serde_json::json!({})
+        }
+    }
 }
 
 fn save_config(config: &serde_json::Value) -> Result<(), String> {
@@ -656,6 +684,7 @@ fn register_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    debug_log::init();
     debug_log::log("=== Quill starting ===");
     logger::cleanup_old_logs(history_days());
     tcc_reset::ensure_permissions(BUNDLE_ID);
@@ -687,6 +716,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(|window, event| {
+            // Closing hides. Quill has one window and it *is* the app: destroy it
+            // (the cross, ⌘W — macOS installs its own Close item when the app sets
+            // no menu) and the hotkey opens nothing, the tray item opens nothing,
+            // and with no windows left Tauri exits the process — tray and all.
+            // The window the tray can raise must always be there to raise.
+            if HIDE_ON_CLOSE.contains(&window.label()) {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_config,
             list_provider_catalog,
@@ -882,5 +924,70 @@ mod endpoint_tests {
         assert!(require_https("https://api.groq.com/openai/v1").is_ok());
         assert!(require_https("  https://api.openai.com/v1 ").is_ok());
         assert!(require_https("").is_ok(), "clearing the field is not an attack");
+    }
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::*;
+
+    fn stack_labels(cfg: &serde_json::Value) -> Vec<String> {
+        cfg[fallback::CONFIG_KEY]
+            .as_array()
+            .expect("a stack")
+            .iter()
+            .map(|e| e["label"].as_str().unwrap_or_default().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_fresh_install_gets_groq_in_front() {
+        let seeded = migrated_config(&serde_json::json!({})).expect("a fresh config is migrated");
+        let labels = stack_labels(&seeded);
+        assert_eq!(labels.len(), 2, "front runner plus a backup");
+        assert!(labels[0].to_lowercase().contains("groq"), "groq runs first, got {:?}", labels);
+    }
+
+    #[test]
+    fn the_old_single_provider_stays_as_the_backup() {
+        let old = serde_json::json!({ "llm_provider": "openai", "shortcut": "ctrl+alt+e" });
+        let seeded = migrated_config(&old).expect("a pre-stack config is migrated");
+        let labels = stack_labels(&seeded);
+        assert!(labels[1].to_lowercase().contains("openai"), "backup should be openai, got {:?}", labels);
+        assert_eq!(seeded["shortcut"], "ctrl+alt+e", "migration must not drop the rest of the config");
+    }
+
+    #[test]
+    fn a_config_that_already_has_a_stack_is_left_alone() {
+        // Runs on every launch: the day it stops being a no-op it starts eating
+        // whatever the user arranged.
+        let mine = serde_json::json!({ fallback::CONFIG_KEY: [{ "id": "p1", "label": "Mine" }] });
+        assert!(migrated_config(&mine).is_none());
+    }
+
+    #[test]
+    fn migrating_twice_changes_nothing_the_second_time() {
+        let once = migrated_config(&serde_json::json!({})).unwrap();
+        assert!(migrated_config(&once).is_none(), "the migration is not idempotent");
+    }
+}
+
+#[cfg(test)]
+mod window_tests {
+    use super::HIDE_ON_CLOSE;
+
+    #[test]
+    fn every_window_hides_on_close_instead_of_being_destroyed() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        for w in conf["app"]["windows"].as_array().expect("windows in the config") {
+            let label = w["label"].as_str().expect("a window without a label");
+            assert!(
+                HIDE_ON_CLOSE.contains(&label),
+                "window '{}' is not in HIDE_ON_CLOSE: closing it destroys it, and Quill \
+                 with no windows left is a dead tray icon",
+                label
+            );
+        }
     }
 }

@@ -8,7 +8,6 @@
     "opener:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
-    "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-start-dragging",
     "core:window:allow-hide",

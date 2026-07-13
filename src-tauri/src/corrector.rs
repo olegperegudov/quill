@@ -238,11 +238,12 @@ pub fn correct_text(
         .map_err(|e| CallError::rejected(format!("parse error: {}", e)))?;
 
     let corrected = parse_response(&json).map_err(CallError::rejected)?;
+    // Sizes, not text: the log is a record of what ran, not of what was written.
     crate::debug_log::log(&format!(
-        "corrector[{}]: {:?} → {:?} ({:.2}s)",
+        "corrector[{}]: {} chars → {} chars ({:.2}s)",
         model,
-        text.chars().take(60).collect::<String>(),
-        corrected.chars().take(60).collect::<String>(),
+        text.chars().count(),
+        corrected.chars().count(),
         elapsed.as_secs_f32()
     ));
     Ok(corrected)

@@ -22,8 +22,9 @@ tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
-# Synthetic keyboard input: send ⌘C to copy the selection, and type the
-# corrected text back over it. No clipboard paste — see inserter.rs.
+# Synthetic ⌘C to copy the selection (non-macOS path in selection.rs). Typing the
+# correction back was abandoned: it needs the Accessibility post-events grant,
+# which every update revoked. The result is copied instead — see lib.rs.
 enigo = "0.2"
 # Read the selection out of the clipboard during capture (then restore it).
 arboard = "3"
