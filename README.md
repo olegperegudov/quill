@@ -34,7 +34,7 @@ Quill is built and used on macOS. The Windows build exists and installs, but it 
 
 ## Fixes the mistakes, keeps your voice
 
-Tone, register and word choices survive — only the errors go. Nothing wrong with the text? Quill says so and leaves it alone. Every correction stays in a small chat; click any bubble to copy it.
+Tone, register and word choices survive — only the errors go. The reply shows what changed: added words underlined, removed ones struck through. Nothing wrong with the text? Quill says so and leaves it alone. Every correction stays in a small chat; click any bubble to copy it.
 
 ![The chat with two corrections](docs/screenshots/chat.png)
 

@@ -8,6 +8,7 @@
 //! so re-polishing is just: click your bubble (copies), paste, tweak, Enter.
 
 import { initSettings } from "./settings.js";
+import { diffWords } from "./diff.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -72,33 +73,77 @@ async function copyBubble(bubble, text) {
   }
 }
 
-// One chat row. role: "user" (your text), "bot" (the correction), "system"
-// (a note — not copyable). `clean` marks a correction that changed nothing.
-function addMessage(role, text, { clean = false } = {}) {
+// A reply row: the feather, then the bubble (and whatever sits under it). The
+// feather is what tells the two sides of the conversation apart at a glance —
+// your text is a plain bubble on the right, Quill's answer is signed on the left.
+function botRow(...children) {
   const msg = document.createElement("div");
-  msg.className = `msg msg-${role}`;
+  msg.className = "msg msg-bot";
+  const mark = document.createElement("img");
+  mark.className = "avatar";
+  mark.src = "quill.png";
+  mark.width = 16;
+  mark.height = 16;
+  mark.alt = "";
+  const stack = document.createElement("div");
+  stack.className = "stack";
+  stack.append(...children);
+  msg.append(mark, stack);
+  return msg;
+}
 
+// Paint the correction as the edits themselves: what Quill dropped is struck
+// through, what it added is underlined. A text too long to diff (a pasted page)
+// falls back to plain — see MAX_TOKENS in diff.js.
+function renderCorrection(bubble, original, corrected) {
+  const ops = original === null ? null : diffWords(original, corrected);
+  if (!ops) {
+    bubble.textContent = corrected;
+    return;
+  }
+  for (const op of ops) {
+    if (op.type === "same") {
+      bubble.append(op.text);
+      continue;
+    }
+    const el = document.createElement(op.type === "ins" ? "ins" : "del");
+    el.textContent = op.text;
+    bubble.appendChild(el);
+  }
+}
+
+// One chat row. role: "user" (your text), "bot" (the correction), "system"
+// (a note — not copyable). `original` is the text the correction came from, so a
+// reply can show what changed; `clean` marks a correction that changed nothing.
+function addMessage(role, text, { clean = false, original = null } = {}) {
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = text;
+  if (role === "bot" && !clean) renderCorrection(bubble, original, text);
+  else bubble.textContent = text;
 
+  const extras = [];
   if (role !== "system") {
     bubble.title = "click to copy";
+    // Copy the correction, never the markup — the struck-through words are the
+    // ones the user asked Quill to get rid of.
     bubble.addEventListener("click", () => copyBubble(bubble, text));
     if (clean) {
       bubble.classList.add("bubble--clean");
       const tag = document.createElement("span");
       tag.className = "clean-tag";
       tag.textContent = "already clean";
-      msg.appendChild(bubble);
-      msg.appendChild(tag);
-      log.appendChild(msg);
-      scrollToBottom();
-      return msg;
+      extras.push(tag);
     }
   }
 
-  msg.appendChild(bubble);
+  let msg;
+  if (role === "bot") {
+    msg = botRow(bubble, ...extras);
+  } else {
+    msg = document.createElement("div");
+    msg.className = `msg msg-${role}`;
+    msg.append(bubble, ...extras);
+  }
   log.appendChild(msg);
   scrollToBottom();
   return msg;
@@ -106,9 +151,10 @@ function addMessage(role, text, { clean = false } = {}) {
 
 // A reply bubble with animated dots while the LLM is thinking.
 function addPending() {
-  const msg = document.createElement("div");
-  msg.className = "msg msg-bot";
-  msg.innerHTML = `<div class="bubble bubble--pending"><span></span><span></span><span></span></div>`;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble bubble--pending";
+  bubble.innerHTML = `<span></span><span></span><span></span>`;
+  const msg = botRow(bubble);
   log.appendChild(msg);
   scrollToBottom();
   return msg;
@@ -148,7 +194,7 @@ async function runCorrection(text) {
     const corrected = await invoke("editor_correct", { text });
     if (!inFlight.has(id)) return; // stopped while we were waiting → discard
     pending.remove();
-    addMessage("bot", corrected, { clean: corrected === text });
+    addMessage("bot", corrected, { clean: corrected === text, original: text });
   } catch (err) {
     if (!inFlight.has(id)) return; // stopped while we were waiting → discard
     pending.remove();
@@ -169,7 +215,7 @@ async function loadHistory() {
       const corr = e.corrected || "";
       ensureDay(e.ts);
       addMessage("user", orig);
-      addMessage("bot", corr, { clean: orig === corr });
+      addMessage("bot", corr, { clean: orig === corr, original: orig });
     }
     scrollToBottom();
   } catch (err) {

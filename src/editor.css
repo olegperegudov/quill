@@ -102,7 +102,17 @@ body {
 
 .msg { display: flex; flex-direction: column; max-width: 84%; }
 .msg-user { align-self: flex-end; align-items: flex-end; }
-.msg-bot { align-self: flex-start; align-items: flex-start; }
+/* A reply is signed with the feather, so the answer is Quill's and the bubble on
+   the right is yours — the same mark as the titlebar and the menu-bar icon. */
+.msg-bot { align-self: flex-start; flex-direction: row; align-items: flex-start; gap: 0.35rem; }
+.msg-bot .avatar {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+  image-rendering: pixelated;
+  opacity: 0.85;
+}
+.msg-bot .stack { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .msg-system { align-self: stretch; align-items: center; max-width: 100%; }
 
 .bubble {
@@ -133,6 +143,27 @@ body {
 }
 .bubble:hover { filter: brightness(1.08); }
 .msg-bot .bubble:hover { box-shadow: 0 0 0 1px var(--ink-dim); }
+
+/* The edits, inside the reply. Added words carry a green wash the eye lands on
+   first (that is the text you keep); removed ones are struck through and stepped
+   back, so they read as a note about the old text rather than part of the new. */
+.msg-bot ins {
+  text-decoration: none;
+  /* An underline, not a filled chip: half the edits are a single comma, and a
+     chip per comma turns the sentence into a string of lights. */
+  background: rgba(74, 222, 128, 0.08);
+  box-shadow: inset 0 -1px 0 rgba(74, 222, 128, 0.55);
+  color: #e6f6ec;
+}
+.msg-bot del {
+  text-decoration: line-through;
+  text-decoration-color: var(--bad);
+  text-decoration-thickness: 1px;
+  color: var(--muted);
+}
+/* A replaced word ("of" → "have") shares one space with its neighbours, so the
+   two halves would touch. Part them without inventing a space in the text. */
+.msg-bot del + ins { margin-left: 3px; }
 
 /* "click to copy" → "copied ✓" flash. */
 .bubble.copied { box-shadow: 0 0 0 1px var(--good); }
