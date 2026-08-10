@@ -52,6 +52,11 @@ struct UpdateItem(tauri::menu::MenuItem<tauri::Wry>);
 const BUNDLE_ID: &str = "com.quill.app";
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
 
+/// Every release, newest first, each with what changed in it and its installers
+/// — where the menu's version item goes. The list, not a single tag: someone who
+/// has just been offered an update wants to read the version above theirs.
+const RELEASES_URL: &str = "https://github.com/olegperegudov/quill/releases";
+
 struct AppState {
     /// True while a capture is in flight — guards against the hotkey re-firing
     /// (key repeat, double-tap) before the previous run finishes.
@@ -916,8 +921,10 @@ pub fn run() {
             // quit. Nothing in the window asks for an update; this menu is the
             // only place it lives.
             let update = MenuItemBuilder::with_id("update", "Check for updates").build(app)?;
+            // The version is a way in, not a label: it opens the release list,
+            // where every build says what changed in it. Deciding whether to
+            // install an update used to mean going and finding that out.
             let version = MenuItemBuilder::with_id("version", format!("Quill v{}", env!("CARGO_PKG_VERSION")))
-                .enabled(false)
                 .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Quill").build(app)?;
             let menu = MenuBuilder::new(app)
@@ -956,6 +963,12 @@ pub fn run() {
                         tauri::async_runtime::spawn(async move {
                             on_update_clicked(app).await;
                         });
+                    }
+                    "version" => {
+                        use tauri_plugin_opener::OpenerExt;
+                        if let Err(e) = app.opener().open_url(RELEASES_URL, None::<&str>) {
+                            debug_log::log(&format!("opening the release list failed: {}", e));
+                        }
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -1186,6 +1199,22 @@ mod tray_tests {
         for id in ["\"update\"", "\"version\"", "\"quit\""] {
             assert!(code.contains(&format!("with_id({}", id)), "tray menu lost {}", id);
         }
+    }
+
+    /// The version item is the way to the release list — the only place that
+    /// says what an update contains. It was a greyed-out label for a while, and
+    /// installing an update meant taking it on trust.
+    #[test]
+    fn the_version_opens_the_release_list() {
+        let code = app_code();
+        assert!(
+            code.contains("open_url(RELEASES_URL"),
+            "the version item no longer opens the release list"
+        );
+        assert!(
+            !code.contains(".enabled(false)"),
+            "a menu item is greyed out again — the version item is a link, not a label"
+        );
     }
 }
 
