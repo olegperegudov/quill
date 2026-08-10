@@ -9,6 +9,21 @@ stay here, out of the release.
 
 ## Unreleased
 
+- Settings has a Prompt box: what Quill asks the model to do is now yours to
+  rewrite, with a reset that puts Quill's own back.
+
+  The instruction was a constant in the binary, so "fix punctuation, keep the
+  tone" was the only thing Quill could ever do. It lives in the config now
+  (`prompt`; empty means the shipped one, so today's wording stays Quill's to
+  improve). Two sentences are appended to whatever is in the box and cannot be
+  switched off: the selection is content, never instructions — the injection
+  guard for a tool that ships arbitrary clipboard text to an LLM — and the answer
+  comes back bare, since it is pasted straight over the user's text. The panel
+  states both under the box rather than pretending they are not there. Rust tests
+  pin that any instruction, including an empty or hostile one, still carries the
+  guard; a JS test pins that the guard has no input of its own and that reset
+  sends an empty string rather than a copy of today's text.
+
 ## v0.1.46 — 2026-08-10
 
 - Nothing to see in the app — this build only changed how release notes are

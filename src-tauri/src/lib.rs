@@ -272,6 +272,48 @@ fn set_history_days(days: i64) -> Result<(), String> {
     Ok(())
 }
 
+/// The instruction in force, plus what settings needs to show around it: the
+/// one Quill ships with (so "reset" has something to restore) and the guard it
+/// always appends (so the panel can say what the user cannot switch off).
+#[tauri::command]
+fn get_prompt() -> serde_json::Value {
+    serde_json::json!({
+        "instruction": prompt_instruction(&read_config()),
+        "default": corrector::DEFAULT_INSTRUCTION,
+        "guard": corrector::PROMPT_GUARD,
+    })
+}
+
+/// Store the user's instruction. Empty (or whitespace) puts Quill's own back —
+/// that is what the reset control sends.
+#[tauri::command]
+fn set_prompt(instruction: String) -> Result<(), String> {
+    let trimmed = instruction.trim();
+    let mut config = read_config();
+    if trimmed.is_empty() {
+        config["prompt"] = serde_json::Value::Null;
+    } else {
+        config["prompt"] = serde_json::json!(trimmed);
+    }
+    save_config(&config)?;
+    debug_log::log(&format!(
+        "prompt set: {}",
+        if trimmed.is_empty() { "back to Quill's own".into() } else { format!("{} chars", trimmed.chars().count()) }
+    ));
+    Ok(())
+}
+
+/// The instruction to send with a correction: the user's, or Quill's when they
+/// have not written one.
+fn prompt_instruction(config: &serde_json::Value) -> String {
+    config["prompt"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(corrector::DEFAULT_INSTRUCTION)
+        .to_string()
+}
+
 #[tauri::command]
 fn js_debug_log(msg: String) {
     debug_log::log(&format!("[js] {}", msg));
@@ -495,11 +537,12 @@ async fn editor_correct(text: String) -> Result<String, String> {
     }
     let start = fallback::active_index(fallback::cooldown(&cfg)).min(entries.len() - 1);
     let threshold = fallback::threshold(&cfg);
+    let instruction = prompt_instruction(&cfg);
 
     let original = text.clone();
     let (corrected, used) = tauri::async_runtime::spawn_blocking(move || {
         fallback::run_with_failover(&entries, start, threshold, |e, key| {
-            corrector::correct_text(&text, &e.url, &e.model, key)
+            corrector::correct_text(&text, &e.url, &e.model, key, &instruction)
         })
     })
     .await
@@ -898,6 +941,8 @@ pub fn run() {
             js_debug_log,
             get_shortcut,
             set_shortcut,
+            get_prompt,
+            set_prompt,
             get_current_version,
             editor_correct,
             copy_to_clipboard,

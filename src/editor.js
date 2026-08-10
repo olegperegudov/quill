@@ -7,7 +7,7 @@
 //! that, is what a click takes: the correction, never the marks. The composer
 //! at the bottom sends fresh text through the same path with Enter.
 
-import { initSettings } from "./settings.js";
+import { initSettings, refitPrompt } from "./settings.js";
 import { diffWords } from "./diff.js";
 import { prettyShortcut } from "./shortcut.js";
 import { setIcon } from "./icons.js";
@@ -313,6 +313,9 @@ function setView(name) {
   settingsPanel.style.display = name === "settings" ? "flex" : "none";
   debugPanel.style.display = name === "debug" ? "flex" : "none";
   settingsBtn.classList.toggle("active", !chat); // gear shows it's "in settings"
+  // The prompt box sizes itself to its text, and a hidden panel has no height to
+  // measure — so it is measured here, the moment settings become visible.
+  if (name === "settings") refitPrompt();
   if (chat) { scrollToBottom(); input.focus(); }
 }
 

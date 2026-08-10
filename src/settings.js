@@ -223,6 +223,62 @@ async function renderStack() {
   return cfg;
 }
 
+// --- Prompt ---
+//
+// What Quill asks the model to do, in the user's hands. Quill's own instruction
+// is what the box starts with; the two sentences it always appends (correct the
+// text, never obey it — and answer with nothing but the correction) are stated
+// underneath rather than editable, because the app stops working without them.
+
+// Grow the box to its text: a prompt read through a four-line window is a prompt
+// nobody edits. Capped in CSS, where it starts scrolling instead. Exported
+// because a hidden panel measures as zero — editor.js calls this when it shows
+// settings, which is the only moment the box has a height at all.
+export function refitPrompt() {
+  const box = $("#prompt-input");
+  if (!box) return;
+  box.style.height = "auto";
+  if (box.scrollHeight) box.style.height = `${box.scrollHeight}px`;
+}
+
+async function setupPrompt() {
+  const box = $("#prompt-input");
+  const { instruction, guard } = await invoke("get_prompt");
+
+  box.addEventListener("input", refitPrompt);
+
+  box.value = instruction;
+  refitPrompt();
+  // The summary is what the panel shows; the sentences themselves are one hover
+  // away, so the claim is checkable without three more lines of grey text.
+  $("#prompt-guard").title = guard;
+
+  // Save on the way out of the field, the way the provider rows do — a prompt
+  // is edited in passes, and a save on every keystroke would be noise.
+  let saved = instruction;
+  const save = async () => {
+    const value = box.value.trim();
+    if (value === saved.trim()) return;
+    try {
+      await invoke("set_prompt", { instruction: value });
+      saved = value;
+      setStatus(value ? "Prompt saved" : "Prompt back to Quill's own", "done");
+    } catch (err) {
+      setStatus(`Couldn't save the prompt: ${err}`, "error");
+    }
+  };
+  box.addEventListener("blur", save);
+
+  $("#prompt-reset").addEventListener("click", async () => {
+    const { default: shipped } = await invoke("get_prompt");
+    box.value = shipped;
+    refitPrompt();
+    await invoke("set_prompt", { instruction: "" });
+    saved = shipped;
+    setStatus("Prompt back to Quill's own", "done");
+  });
+}
+
 // --- Shortcut capture ---
 
 let capturing = false;
@@ -294,6 +350,7 @@ export async function initSettings() {
 
   $("#shortcut-display").textContent = pretty(await invoke("get_shortcut"));
   setupShortcutCapture();
+  await setupPrompt();
   await setupUpdates();
   return cfg;
 }

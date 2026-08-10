@@ -419,6 +419,58 @@ body {
 /* Where updating went, said once and quietly. */
 .setting-hint { font-family: var(--mono); font-size: 0.62rem; color: var(--slug-dim); }
 
+/* Prompt --------------------------------------------------------------- */
+/* The instruction Quill sends with every correction, in the machine's own face:
+   it is text bound for a model, not a caption. The guard line underneath is the
+   part no setting removes, so it is stated as fact and set like a footnote. */
+.prompt-box {
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+.prompt-input {
+  display: block;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  resize: none; /* the box grows to its text — a scrollbar inside a prompt hides half of it */
+  overflow-y: auto;
+  max-height: 15rem;
+  font-family: var(--machine-face);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--machine);
+  background: var(--ground-deep);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.5rem 0.55rem;
+}
+.prompt-input:focus {
+  outline: none;
+  border-color: var(--ribbon);
+}
+.prompt-guard {
+  margin: 0.4rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  line-height: 1.5;
+  color: var(--slug-dim);
+}
+/* A control that reads as text, for an action that is a correction, not a
+   command: the same weight as the "edit" link on a saved key. */
+.link-btn {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--slug-dim);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--ribbon); }
+.link-btn:focus-visible { outline: 1px solid var(--ribbon); outline-offset: 2px; }
+
 /* Provider stack ------------------------------------------------------ */
 /* The "Models" block: one card per provider, in priority order. It sits in the
    settings list, so it borrows the row rhythm rather than inventing its own. */
