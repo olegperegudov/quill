@@ -45,12 +45,15 @@ decoration.
 
 ## Type
 
-- **Transcript**: `"Courier New", ui-monospace` 12.5px/1.72. Not a costume for
+- **Transcript**: `--machine-face` ("Courier New") 12.5px/1.72. Not a costume for
   "technical": this text was typed by a machine, and it is set as such.
-- **Clean copy**: `Georgia, "Times New Roman", serif` 13.5px/1.62 — a reading
+- **Clean copy**: `--paper-face` (Georgia) 13.5px/1.62 — a reading
   face for the finished text, with Cyrillic and Latin equally covered.
-- **Labels, wordmark, dates, settings rows**: `ui-monospace` at 0.6–0.72rem,
-  uppercase, tracked `0.14–0.2em`. Silkscreen on a machine's case.
+- **Labels, wordmark, dates, settings rows and every settings value**: the
+  `--mono` stack at 0.6–0.74rem, uppercase, tracked `0.1–0.2em`. Silkscreen on a
+  machine's case. The stack names Consolas and Segoe UI Mono after the Apple
+  faces — falling through to generic `monospace` changed every label's character
+  on Windows.
 - **Notes and body chrome**: the system sans.
 
 CSP is `default-src 'self'`: no remote fonts. A face this world eventually wants
@@ -61,7 +64,7 @@ must be self-hosted as a woff2 inside the app.
 ```
 titlebar        feather · QUILL · status                    ⚙ ✕
 ────────────────────────────────────────────────────────────────
-log             (sheets stack up from the composer)
+log             (sheets stack down from the titlebar)
   date-sep      mo, aug 10th ─────────────────────────────
   entry         TRANSCRIPT                          5 EDITS
                 machine text with ribbon marks in place
@@ -73,8 +76,8 @@ composer        type or paste…                            ↑
 ```
 
 - One `.entry` per correction; a hairline separates entries, nothing else.
-- `.log > :first-child { margin-top: auto }` — a lone correction sits by the
-  composer, and the dead space is above it.
+- The stack fills from under the titlebar down, as the approved prototype does;
+  dead space belongs at the bottom, where the composer is.
 - Nothing changed → no transcript block, one sheet labelled `already clean`.
 - The window opens at 520×700, min 360×420, and keeps the size it is dragged to
   (`tauri-plugin-window-state`).
@@ -89,6 +92,9 @@ composer        type or paste…                            ↑
 - **Error / app note**: `.note`, a ribbon tick in the margin, never a sheet —
   nothing there is yours to copy.
 - **Hover**: the sheet gains an edge, not a lift.
+- **Focus**: the sheet is a `role="button"` with `tabIndex 0`, Enter and Space
+  copy it, and `:focus-visible` rings it in ribbon red. It is the app's primary
+  action; mouse-only was a defect.
 
 ## Rules that outlive this build
 
@@ -98,10 +104,13 @@ composer        type or paste…                            ↑
    considered (the "type specimen" alternate) and refused: the eye should not
    have to travel to learn what changed.
 3. Green means copied. Nothing else may borrow it.
-4. New chrome inherits the hairline-and-label grammar: 1px rules, 2px corners on
+4. Icons are drawn (`src/icons.js`) at stroke 1.7 with round caps — no glyph
+   from the emoji table stands in for one, and the settings icon is the
+   machine's control panel, not a 16px gear turned to mud.
+5. New chrome inherits the hairline-and-label grammar: 1px rules, 2px corners on
    paper, 4px on controls, mono small-caps labels. No cards, no glass, no
    gradients.
-5. Shared behaviour with Ribbit and Iago stays identical — the copy flash and
+6. Shared behaviour with Ribbit and Iago stays identical — the copy flash and
    the tray split (left click opens the window, right click the menu) are the
    family's, not Quill's alone.
 

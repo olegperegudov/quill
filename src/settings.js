@@ -7,6 +7,7 @@
 //! transient status in the panel header. editor.js owns showing/hiding it.
 
 import { shortcutFromEvent, prettyShortcut } from "./shortcut.js";
+import { icon } from "./icons.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -57,11 +58,13 @@ async function loadCatalog() {
   return catalog;
 }
 
+// `label` is a drawn icon (icons.js), or text where a word is clearer.
 function miniBtn(label, disabled, title, onClick) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "provider-mini-btn";
-  b.textContent = label;
+  if (typeof label === "string") b.textContent = label;
+  else b.appendChild(label);
   b.title = title;
   b.disabled = !!disabled;
   if (!disabled) b.addEventListener("click", onClick);
@@ -102,7 +105,8 @@ function keyRow(entry) {
 
   const chip = document.createElement("span");
   chip.className = "key-status";
-  chip.innerHTML = '<span class="key-saved-check">✓</span> saved <a class="link">edit</a>';
+  chip.innerHTML = '<span class="key-saved-check"></span> saved <a class="link">edit</a>';
+  chip.querySelector(".key-saved-check").appendChild(icon("check", 12));
 
   const show = (saved) => {
     chip.style.display = saved ? "inline-flex" : "none";
@@ -148,15 +152,15 @@ function providerCard(entry, index, total) {
 
   const ctrls = document.createElement("div");
   ctrls.className = "provider-ctrls";
-  ctrls.appendChild(miniBtn("↑", index === 0, "Move up (runs earlier)", async () => {
+  ctrls.appendChild(miniBtn(icon("up", 12), index === 0, "Move up (runs earlier)", async () => {
     await invoke("move_provider", { id: entry.id, up: true });
     renderStack();
   }));
-  ctrls.appendChild(miniBtn("↓", index === total - 1, "Move down", async () => {
+  ctrls.appendChild(miniBtn(icon("down", 12), index === total - 1, "Move down", async () => {
     await invoke("move_provider", { id: entry.id, up: false });
     renderStack();
   }));
-  const del = miniBtn("✕", false, "Remove", async () => {
+  const del = miniBtn(icon("close", 12), false, "Remove", async () => {
     await invoke("remove_provider", { id: entry.id });
     renderStack();
   });
@@ -190,7 +194,8 @@ async function renderStack() {
     const mins = Math.max(1, Math.ceil((st.remaining_secs || 0) / 60));
     const active = entries[st.active];
     const who = active ? (active.label || active.url) : `#${st.active + 1}`;
-    line.textContent = `⚡ running on ${who} (#${st.active + 1} of ${st.total}) · first choice retried in ~${mins} min`;
+    line.appendChild(icon("bolt", 12));
+    line.append(` running on ${who} (#${st.active + 1} of ${st.total}) · first choice retried in ~${mins} min`);
     container.appendChild(line);
   }
 

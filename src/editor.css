@@ -9,6 +9,11 @@
    window is a document under correction, not a conversation. */
 
 :root {
+  /* Faces. The mono is named for both shipped platforms: falling to generic
+     `monospace` on Windows changed the character of every label. */
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Segoe UI Mono", monospace;
+  --machine-face: "Courier New", Courier, var(--mono);
+  --paper-face: Georgia, "Times New Roman", serif;
   /* The desk */
   --ground: #17150f;       /* warm graphite, the desk surface */
   --ground-deep: #131109;  /* titlebar and composer, one step down */
@@ -81,7 +86,7 @@ body {
 .brand-text { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
 /* Silkscreened on the machine's case, not set as a logotype. */
 .wordmark {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-weight: 600;
   font-size: 0.72rem;
   letter-spacing: 0.2em;
@@ -114,12 +119,6 @@ body {
   flex-direction: column;
 }
 
-/* Sheets stack up from the composer, not down from the titlebar: with one
-   correction on the desk the dead space belongs above it, not below. Safe with
-   overflow (unlike justify-content: flex-end, which clips the top when the
-   stack outgrows the window). */
-.log > :first-child { margin-top: auto; }
-
 /* One correction: the marked-up transcript, then the clean sheet under it. */
 .entry { border-bottom: 1px solid var(--rule); padding: 0.65rem 0.8rem 0.8rem; }
 .entry:last-child { border-bottom: none; }
@@ -130,7 +129,7 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.6rem;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.6rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -142,7 +141,7 @@ body {
 
 /* What the machine typed, with Quill's marks in the ribbon's own red. */
 .draft {
-  font-family: "Courier New", ui-monospace, Menlo, monospace;
+  font-family: var(--machine-face);
   font-size: 12.5px;
   line-height: 1.72;
   color: var(--machine);
@@ -170,7 +169,7 @@ body {
   color: var(--paper-ink);
   border-radius: 2px;
   box-shadow: 0 1px 0 var(--paper-edge), 0 10px 18px -14px rgba(0, 0, 0, 0.9);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--paper-face);
   font-size: 13.5px;
   line-height: 1.62;
   white-space: pre-wrap;
@@ -183,6 +182,10 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .sheet .slug { color: var(--paper-slug); }
+.sheet:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 0 var(--paper-edge), 0 0 0 2px var(--ribbon), 0 10px 18px -14px rgba(0,0,0,.9);
+}
 .sheet:hover { box-shadow: 0 1px 0 var(--paper-edge), 0 0 0 1px var(--paper-edge), 0 10px 18px -14px rgba(0,0,0,.9); }
 
 /* Copied — the whole sheet answers, the way Ribbit's log lines do: it takes the
@@ -211,11 +214,13 @@ body {
   width: 100%;
   max-width: 22rem;
   padding: 1.1rem 1.2rem;
-  border: 1px dashed var(--rule);
+  border: 1px solid var(--rule);
+  border-left: none;
+  border-right: none;
   border-radius: 2px;
   text-align: center;
   color: var(--slug);
-  font-family: "Courier New", ui-monospace, Menlo, monospace;
+  font-family: var(--machine-face);
   font-size: 12px;
   line-height: 1.8;
 }
@@ -269,7 +274,7 @@ body {
 }
 .date-sep::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
 .date-sep-label {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.6rem;
   color: var(--slug-dim);
   letter-spacing: 0.16em;
@@ -297,7 +302,7 @@ body {
   border: none;
   color: var(--machine);
   padding: 0.4rem 0 0.35rem;
-  font-family: "Courier New", ui-monospace, Menlo, monospace;
+  font-family: var(--machine-face);
   font-size: 12.5px;
   line-height: 1.6;
   outline: none;
@@ -316,18 +321,21 @@ body {
 }
 .composer:focus-within::before { background: var(--ribbon); }
 
+/* No chip around it: the composer is a ruled line, and the arrow sits on that
+   line. The stop state below is the one time it takes a filled shape. */
 .send {
   flex-shrink: 0;
-  width: 30px; height: 30px;
+  width: 28px; height: 28px;
   display: grid; place-items: center;
   background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
+  border: none;
+  border-radius: 4px;
   color: var(--slug);
   cursor: pointer;
-  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  transition: color 0.12s, background 0.12s;
 }
-.send:hover { border-color: var(--ribbon); color: var(--ribbon-hi); }
+.send:hover { color: var(--ribbon-hi); }
+.send:focus-visible { outline: none; color: var(--ribbon-hi); background: #221e15; }
 /* Both glyphs share the single grid cell; only one shows at a time. */
 .send .i-stop { display: none; }
 .send .i-send { display: block; }
@@ -335,8 +343,8 @@ body {
 /* While a correction is running the send button becomes a stop button — the
    request is non-streaming, so this drops the pending block and lets you edit
    and resend. */
-.composer.generating .send { background: var(--ribbon); border-color: var(--ribbon); color: #fff2f0; }
-.composer.generating .send:hover { background: var(--ribbon-hi); border-color: var(--ribbon-hi); }
+.composer.generating .send { background: var(--ribbon); color: #fff2f0; }
+.composer.generating .send:hover { background: var(--ribbon-hi); }
 .composer.generating .send .i-send { display: none; }
 .composer.generating .send .i-stop {
   display: block;
@@ -361,7 +369,7 @@ body {
 
 /* Transient status beside the wordmark; hidden at rest. */
 .status-detail {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.62rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -381,7 +389,7 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.62rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -400,7 +408,7 @@ body {
   border-bottom: 1px solid var(--rule);
 }
 .setting-label {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -409,13 +417,13 @@ body {
 }
 #version { color: var(--slug); }
 /* Where updating went, said once and quietly. */
-.setting-hint { font-size: 0.72rem; color: var(--slug-dim); }
+.setting-hint { font-family: var(--mono); font-size: 0.62rem; color: var(--slug-dim); }
 
 /* Provider stack ------------------------------------------------------ */
 /* The "Models" block: one card per provider, in priority order. It sits in the
    settings list, so it borrows the row rhythm rather than inventing its own. */
 .setting-row--head { border-bottom: none; padding-bottom: 0.3rem; }
-.setting-note { font-size: 0.7rem; color: var(--slug-dim); }
+.setting-note { font-family: var(--mono); font-size: 0.62rem; color: var(--slug-dim); }
 
 .provider-stack {
   display: flex;
@@ -439,9 +447,10 @@ body {
   justify-content: space-between;
   gap: 0.4rem;
 }
-.provider-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; color: #cdc4ad; }
+.provider-name { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.74rem;
+                 letter-spacing: 0.08em; text-transform: uppercase; color: #cdc4ad; }
 .provider-primary-tag {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.56rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -469,7 +478,10 @@ body {
 
 .provider-field { display: flex; align-items: center; gap: 0.5rem; }
 .provider-field-label {
-  font-size: 0.66rem;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--slug);
   width: 52px; /* fits the longest label ("endpoint") without clipping */
   flex-shrink: 0;
@@ -483,13 +495,17 @@ body {
   font-size: 0.74rem;
   padding: 0.28rem 0.4rem;
 }
-.provider-field .provider-input.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--slug); }
+.provider-field .provider-input.mono { font-family: var(--mono); }
+.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--mono); font-size: 0.7rem; color: var(--slug); }
 .key-saved-check { color: #5da37c; }
 
 /* An active fallback must never be silent — the user would blame Quill. */
 .fallback-status {
-  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.66rem;
   color: #e0b07c;
   border: 1px solid rgba(224, 176, 124, 0.28);
   border-radius: 4px;
@@ -500,11 +516,10 @@ body {
   width: 100%;
   min-width: 0;
   color: var(--slug);
-  border-style: dashed;
 }
 .provider-add select:hover { border-color: var(--ribbon); color: var(--machine); }
 
-.fallback-knobs .knobs { font-size: 0.75rem; color: var(--slug); text-align: right; }
+.fallback-knobs .knobs { font-family: var(--mono); font-size: 0.68rem; color: var(--slug); text-align: right; }
 .fallback-knobs input[type="number"] {
   width: 54px;
   text-align: center;
@@ -514,13 +529,13 @@ body {
 }
 
 select, input[type="password"], input[type="text"], input[type="number"] {
+  font-family: var(--mono);
   background: #1c1912;
   border: 1px solid var(--rule);
   border-radius: 4px;
   color: var(--machine);
   padding: 0.35rem 0.5rem;
-  font-size: 0.8rem;
-  font-family: inherit;
+  font-size: 0.74rem;
   outline: none;
   max-width: 60%;
 }
@@ -542,7 +557,7 @@ input::placeholder { color: var(--slug-dim); }
 .settings-note { font-size: 0.72rem; color: var(--slug-dim); padding: 0.6rem 0.1rem; }
 
 kbd {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.76rem;
   background: #1c1912;
   border: 1px solid var(--rule);
@@ -587,7 +602,7 @@ kbd.capturing { border-color: var(--ribbon); color: var(--ribbon-hi); }
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 0.5rem;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.68rem;
   color: var(--slug);
   white-space: pre-wrap;

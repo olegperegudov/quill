@@ -10,6 +10,7 @@
 import { initSettings } from "./settings.js";
 import { diffWords } from "./diff.js";
 import { prettyShortcut } from "./shortcut.js";
+import { setIcon } from "./icons.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -152,11 +153,21 @@ function settle(parts, original, corrected) {
 
   const sheet = document.createElement("div");
   sheet.className = "sheet";
+  // The one thing the app exists to hand over: a control, not a paragraph that
+  // happens to listen for clicks.
+  sheet.tabIndex = 0;
+  sheet.setAttribute("role", "button");
+  sheet.setAttribute("aria-label", "Copy the corrected text");
   sheet.append(slug(clean ? "already clean · click to copy" : "clean copy · click to copy"));
   sheet.append(corrected);
   // Copy the correction, never the markup — the struck-through words are the
   // ones the user asked Quill to get rid of.
   sheet.addEventListener("click", () => copySheet(sheet, corrected));
+  sheet.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    copySheet(sheet, corrected);
+  });
   entry.appendChild(sheet);
   scrollToBottom();
 }
@@ -174,8 +185,8 @@ async function showEmptyDesk() {
   const blank = document.createElement("div");
   blank.className = "blank";
   blank.innerHTML =
-    `<div class="blank-sheet"><p>Select text anywhere and press <kbd>${keys}</kbd>.</p>` +
-    `<p>Or paste it below — Enter corrects it.</p></div>`;
+    `<div class="blank-sheet"><p>Paste text below — Enter corrects it.</p>` +
+    `<p>Or select it anywhere and press <kbd>${keys}</kbd>.</p></div>`;
   log.appendChild(blank);
 }
 
@@ -280,6 +291,14 @@ input.addEventListener("keydown", (e) => {
   // Enter sends; Shift+Enter is a newline.
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
+
+// The chrome's glyphs are drawn, not typed: one stroke weight across the gear,
+// the cross, the prompt and the arrows in the model stack (icons.js).
+setIcon(settingsBtn, "gear");
+setIcon($("#close"), "close");
+setIcon($("#debug-btn"), "prompt");
+setIcon($("#debug-close"), "close");
+setIcon($(".i-send"), "send", 16);
 
 // --- Views (Ribbit-style: one window, the titlebar stays, the body swaps) ---
 

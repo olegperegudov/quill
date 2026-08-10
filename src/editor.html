@@ -20,8 +20,8 @@
           </div>
         </div>
         <div class="win-controls">
-          <button id="settings-btn" class="win-btn" title="Chat / settings">&#x2699;</button>
-          <button id="close" class="win-btn win-close" title="Hide (Esc)">&#x2715;</button>
+          <button id="settings-btn" class="win-btn" title="Chat / settings"></button>
+          <button id="close" class="win-btn win-close" title="Hide (Esc)"></button>
         </div>
       </header>
 
@@ -33,7 +33,7 @@
         <textarea id="input" rows="1" spellcheck="false"
                   placeholder="Type or paste text…  Enter to send"></textarea>
         <button id="send" class="send" type="submit" title="Send (Enter)" aria-label="Send">
-          <svg class="i-send" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3.5"/><path d="M3.8 7.2 8 3l4.2 4.2"/></svg>
+          <span class="i-send"></span>
           <span class="i-stop" aria-hidden="true"></span>
         </button>
       </form>
@@ -62,7 +62,7 @@
         </div>
         <div class="setting-row">
           <span class="setting-label">Debug log</span>
-          <button id="debug-btn" class="ghost" title="Debug log">&gt;_</button>
+          <button id="debug-btn" class="ghost" title="Debug log"></button>
         </div>
         <!-- Updating lives in the menu-bar menu (the pen turns green when one is
              waiting) — the window only states which version is running. -->
@@ -76,7 +76,7 @@
       <div id="debug-panel" class="view-panel debug-view" style="display:none">
         <div class="panel-head">
           <span>debug log</span>
-          <button id="debug-close" class="win-btn" title="Back">&#x2715;</button>
+          <button id="debug-close" class="win-btn" title="Back"></button>
         </div>
         <pre id="debug-content"></pre>
       </div>
