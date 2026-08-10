@@ -62,12 +62,13 @@ function ensureDay(iso) {
   log.appendChild(sep);
 }
 
-// Copy a bubble's text and flash a brief "copied" on it.
+// Copy a bubble's text and flash the whole of it green — Ribbit's signal, and
+// the one the eye is already on, since the cursor is over the text it just took.
 async function copyBubble(bubble, text) {
   try {
     await invoke("copy_to_clipboard", { text });
     bubble.classList.add("copied");
-    setTimeout(() => bubble.classList.remove("copied"), 900);
+    setTimeout(() => bubble.classList.remove("copied"), 700);
   } catch (err) {
     dlog(`copy failed: ${err}`);
   }

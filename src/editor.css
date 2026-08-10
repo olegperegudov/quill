@@ -126,7 +126,9 @@ body {
   user-select: text;
   -webkit-user-select: text;
   cursor: pointer;
-  transition: filter 0.12s, box-shadow 0.12s;
+  /* The copy flash rides these: it lands instantly (`.copied` kills the
+     transition) and fades back out over a fifth of a second. */
+  transition: filter 0.12s, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 /* Your text — accent tint, tail on the right. */
 .msg-user .bubble {
@@ -165,21 +167,28 @@ body {
    two halves would touch. Part them without inventing a space in the text. */
 .msg-bot del + ins { margin-left: 3px; }
 
-/* "click to copy" → "copied ✓" flash. */
-.bubble.copied { box-shadow: 0 0 0 1px var(--good); }
-.bubble.copied::after {
-  content: "copied ✓";
-  position: absolute;
-  bottom: calc(100% + 4px);
-  right: 0;
-  background: var(--good);
-  color: #08210f;
-  font-size: 0.66rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 5px;
-  white-space: nowrap;
-  pointer-events: none;
+/* Copied — the whole text flashes green, the way Ribbit's log lines do. A badge
+   in the corner asks to be looked for; the text you just took turning colour
+   under the cursor does not. It comes on at once and fades back out (the base
+   .bubble transition below carries the way back), so the eye catches the change
+   without a blink of chrome. */
+.bubble.copied {
+  transition: none;
+  background: rgba(74, 222, 128, 0.1);
+  color: var(--good);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.45);
+}
+/* The cursor is by definition on the bubble it just copied, so the flash has to
+   outrank the hover ring — same weight, stated later. */
+.msg-bot .bubble.copied { box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.45); }
+/* The edit marks join the flash instead of holding their own colours — for that
+   moment the bubble is one piece of text, not a diff. */
+.bubble.copied ins,
+.bubble.copied del {
+  color: var(--good);
+  background: transparent;
+  box-shadow: none;
+  text-decoration-color: currentColor;
 }
 
 .bubble--clean { opacity: 0.72; }

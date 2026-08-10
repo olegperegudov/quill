@@ -35,7 +35,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     AppHandle, Emitter, Manager,
     menu::{MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 use tauri_plugin_updater::UpdaterExt;
@@ -45,8 +45,8 @@ use tauri_plugin_updater::UpdaterExt;
 const TRAY_UPDATE_ICON: &[u8] = include_bytes!("../icons/tray-update.png");
 
 /// The tray's update item, kept reachable so `announce_update` can rewrite it.
-/// A newtype because Tauri keys managed state by type, and the "Show Quill"
-/// item already occupies plain `MenuItem<Wry>`.
+/// A newtype because Tauri keys managed state by type: a bare `MenuItem<Wry>`
+/// would be ambiguous the moment a second item wants to be managed too.
 struct UpdateItem(tauri::menu::MenuItem<tauri::Wry>);
 
 const BUNDLE_ID: &str = "com.quill.app";
@@ -645,23 +645,25 @@ fn save_config(config: &serde_json::Value) -> Result<(), String> {
     private::write(&path, serde_json::to_string_pretty(config).unwrap().as_bytes()).map_err(|e| e.to_string())
 }
 
-/// Show/hide the chat from the tray — the chat *is* the app's face, so the tray
-/// toggles it (not the settings window). Mirrors Ribbit: we avoid
-/// minimize/unminimize on macOS (it forces a Space switch); hide()/show() lands
-/// on the user's current Space. No cursor repositioning here — that's only for
-/// the hotkey, which opens the chat where you're working.
-fn toggle_chat_window<R: tauri::Runtime>(app: &AppHandle<R>, label: &tauri::menu::MenuItem<R>) {
-    let Some(w) = app.get_webview_window("editor") else { return };
+/// Show/hide the chat from the tray — the chat *is* the app's face, so a left
+/// click on the icon toggles it, the way the frog and the parrot do. Mirrors
+/// Ribbit: we avoid minimize/unminimize on macOS (it forces a Space switch);
+/// hide()/show() lands on the user's current Space. No cursor repositioning
+/// here — that's only for the hotkey, which opens the chat where you're working.
+fn toggle_chat_window<R: tauri::Runtime>(app: &AppHandle<R>) {
+    let Some(w) = app.get_webview_window("editor") else {
+        // A window that isn't there reads as a dead icon. Say so in the log.
+        debug_log::log("tray: the chat window is gone, cannot show it");
+        return;
+    };
     let visible = w.is_visible().unwrap_or(false);
     let focused = w.is_focused().unwrap_or(false);
     if visible && focused {
         let _ = w.hide();
-        let _ = label.set_text("Show Quill");
     } else {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
-        let _ = label.set_text("Hide Quill");
     }
 }
 
@@ -762,12 +764,12 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            // System tray. A left click opens the menu — same as Ribbit and
-            // CopyPaster, so "click the animal, get a menu" holds everywhere.
-            // The update line is the only place updating lives; the window has
-            // no button for it.
+            // System tray, split the way the frog and the parrot split it: the
+            // left button is the way into the app (it toggles the chat), the
+            // right button is the way to the housekeeping — update, version,
+            // quit. Nothing in the window asks for an update; this menu is the
+            // only place it lives.
             let update = MenuItemBuilder::with_id("update", "Check for updates").build(app)?;
-            let show = MenuItemBuilder::with_id("show", "Show Quill").build(app)?;
             let version = MenuItemBuilder::with_id("version", format!("Quill v{}", env!("CARGO_PKG_VERSION")))
                 .enabled(false)
                 .build(app)?;
@@ -775,20 +777,32 @@ pub fn run() {
             let menu = MenuBuilder::new(app)
                 .item(&update)
                 .separator()
-                .item(&show)
-                .separator()
                 .item(&version)
                 .item(&quit)
                 .build()?;
 
-            let show_for_menu = show.clone();
             // announce_update() rewrites this item's text when a release lands.
             app.manage(UpdateItem(update.clone()));
 
             let mut tray_builder = TrayIconBuilder::with_id("tray")
                 .tooltip("Quill — polish your writing")
                 .menu(&menu)
-                .show_menu_on_left_click(true)
+                // The menu belongs to the right button alone, or it and the
+                // window would fight over the same click.
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        // On the release, not the press: the press is also what
+                        // takes focus off an open window, and acting on both
+                        // toggles twice.
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        toggle_chat_window(tray.app_handle());
+                    }
+                })
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "update" => {
                         let app = app.clone();
@@ -796,7 +810,6 @@ pub fn run() {
                             on_update_clicked(app).await;
                         });
                     }
-                    "show" => toggle_chat_window(app, &show_for_menu),
                     "quit" => app.exit(0),
                     _ => {}
                 });
@@ -969,6 +982,44 @@ mod config_tests {
     fn migrating_twice_changes_nothing_the_second_time() {
         let once = migrated_config(&serde_json::json!({})).unwrap();
         assert!(migrated_config(&once).is_none(), "the migration is not idempotent");
+    }
+}
+
+#[cfg(test)]
+mod tray_tests {
+    /// This file up to its first test module. Both tests below read the source
+    /// for lines they also quote in their own assertions — searching the whole
+    /// file would find the quote and pass over a deleted builder line.
+    fn app_code() -> &'static str {
+        include_str!("lib.rs").split("#[cfg(test)]").next().expect("lib.rs has a body")
+    }
+
+    /// The three apps share one reflex: left click on the animal opens its
+    /// window, right click opens the housekeeping menu. Letting Tauri put the
+    /// menu back on the left button is a one-word regression that takes the
+    /// window away entirely — the left click would open a menu and the
+    /// `TrayIconEvent::Click` handler would never fire.
+    #[test]
+    fn the_left_click_belongs_to_the_window_not_the_menu() {
+        let code = app_code();
+        assert!(
+            code.contains("show_menu_on_left_click(false)"),
+            "the menu is back on the left button — the window has no way in from the tray"
+        );
+        assert!(
+            code.contains("button: MouseButton::Left"),
+            "nothing handles the left click; the tray icon does nothing at all"
+        );
+    }
+
+    /// Update, version, quit — the same three the frog and the parrot carry, and
+    /// the only place updating lives (the window has no button for it).
+    #[test]
+    fn the_menu_carries_update_version_and_quit() {
+        let code = app_code();
+        for id in ["\"update\"", "\"version\"", "\"quit\""] {
+            assert!(code.contains(&format!("with_id({}", id)), "tray menu lost {}", id);
+        }
     }
 }
 
