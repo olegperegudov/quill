@@ -5,6 +5,8 @@ enough to understand *what* changed and *why* without digging through diffs.
 
 ## Unreleased
 
+## v0.1.45 — 2026-08-10
+
 **The version in the menu says what changed, instead of just sitting there greyed out.** Installing an update was taking it on trust: the menu named the running version as a disabled label, and the release page said "see the assets below to download and install" — what a build actually contained lived only in this file, in a repo nobody opens mid-update. The item still just names the version, but it is clickable now and opens the release list: newest build at the top with what changed in it, the running one right below, installers for both platforms on each. The notes come from here — the build cuts the Unreleased section under the version it is publishing, leaves a fresh empty one behind, and hands the text to the release (`.github/scripts/cut_release_notes.py`; an empty section changes nothing and the release keeps the generic line). Everything written before this change is filed under "Up to v0.1.44", since those entries shipped across a dozen releases with no way to tell which.
 
 ## Up to v0.1.44
