@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.49 — 2026-08-10
+
 - Settings has a Prompt box: what Quill asks the model to do is now yours to
   rewrite, with a reset that puts Quill's own back.
 
