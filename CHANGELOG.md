@@ -1,13 +1,29 @@
 # Changelog
 
-Engineering release notes. Primary reader: future Claude. Detailed on purpose —
-enough to understand *what* changed and *why* without digging through diffs.
+Two readers, one file. **Top-level bullets are for the person installing the
+update** — one line each, plain language, no file names: they are what the GitHub
+release page shows, cut from the Unreleased section at build time
+(`.github/scripts/cut_release_notes.py`). **Indented paragraphs under a bullet are
+for the next engineer** — why it broke, what was rejected, what a test pins — and
+stay here, out of the release.
 
 ## Unreleased
 
 ## v0.1.45 — 2026-08-10
 
-**The version in the menu says what changed, instead of just sitting there greyed out.** Installing an update was taking it on trust: the menu named the running version as a disabled label, and the release page said "see the assets below to download and install" — what a build actually contained lived only in this file, in a repo nobody opens mid-update. The item still just names the version, but it is clickable now and opens the release list: newest build at the top with what changed in it, the running one right below, installers for both platforms on each. The notes come from here — the build cuts the Unreleased section under the version it is publishing, leaves a fresh empty one behind, and hands the text to the release (`.github/scripts/cut_release_notes.py`; an empty section changes nothing and the release keeps the generic line). Everything written before this change is filed under "Up to v0.1.44", since those entries shipped across a dozen releases with no way to tell which.
+- **The version in the menu opens the release list.** Every build there says what
+  changed in it, with installers for Mac and Windows — so an update is no longer
+  something you install on trust.
+
+  The item was a greyed-out label and the release page said "see the assets below
+  to download and install"; what a build contained lived only in this file, in a
+  repo nobody opens mid-update. The notes now come from here: the build closes the
+  Unreleased section under the version it publishes, leaves a fresh empty one
+  behind, and hands the bullets — not the indented detail — to the release. An
+  empty section changes nothing and the release keeps the generic line; prose with
+  no bullets fails the build rather than publishing silence. Everything written
+  before this change is filed under "Up to v0.1.44", since those entries shipped
+  across a dozen releases with no way to tell which.
 
 ## Up to v0.1.44
 
