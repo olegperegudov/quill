@@ -1,17 +1,17 @@
 # Changelog
 
-Two readers, one file. **Top-level bullets are for the person installing the
-update** — one line each, plain language, no file names: they are what the GitHub
+Two readers, one file. Top-level bullets are for the person installing the
+update — one line each, plain language, no file names: they are what the GitHub
 release page shows, cut from the Unreleased section at build time
-(`.github/scripts/cut_release_notes.py`). **Indented paragraphs under a bullet are
-for the next engineer** — why it broke, what was rejected, what a test pins — and
+(`.github/scripts/cut_release_notes.py`). Indented paragraphs under a bullet are
+for the next engineer — why it broke, what was rejected, what a test pins — and
 stay here, out of the release.
 
 ## Unreleased
 
 ## v0.1.46 — 2026-08-10
 
-- **Nothing to see in the app** — this build only changed how release notes are
+- Nothing to see in the app — this build only changed how release notes are
   written, so the list you are reading exists at all.
 
   The first notes cut from the changelog published the engineering paragraphs
@@ -24,7 +24,7 @@ stay here, out of the release.
 
 ## v0.1.45 — 2026-08-10
 
-- **The version in the menu opens the release list.** Every build there says what
+- The version in the menu opens the release list. Every build there says what
   changed in it, with installers for Mac and Windows — so an update is no longer
   something you install on trust.
 
@@ -40,92 +40,92 @@ stay here, out of the release.
 
 ## v0.1.44 — 2026-08-10
 
-- **The chat stays on the desktop you opened it on.** Swiping to another one used
+- The chat stays on the desktop you opened it on. Swiping to another one used
   to show it there mid-swipe, then take it away again.
 
-  **The chat follows you to the desktop you are on, instead of living on all of them.** Swiping to another desktop showed Quill's window on the desktop being entered — mid-swipe it was on both — and then took it away once the swipe finished. The window was declared CanJoinAllSpaces: resident on every Space. That flag was there to buy one thing (the hotkey positions the window before showing it, and with an ordinary "home Space" that teleported the user to another desktop), at the cost of the window being everywhere. The chat is now the same non-activating NSPanel the frog is — MoveToActiveSpace plus FullScreenAuxiliary — so it arrives on the current desktop, over a full-screen app included, takes the keyboard without activating Quill, and stays behind on the old desktop when you swipe away. The style mask keeps `resizable` (an empty mask nails a borderless window shut), and the panel's own `window_did_resign_key` delegate is what puts it back in the tray now: a non-activating panel never activates the app, so Tauri's window-focus event does not fire on macOS and the Rust-side handler is the Windows half of the behaviour. Show/hide/visible went through one pair of helpers so the tray, the hotkey, Esc and the cross all take the same path. Tests read the panel's source and fail if MoveToActiveSpace, the non-activating mask or the focus-lost delegate goes missing, or if the hand-rolled CanJoinAllSpaces comes back.
+  The chat follows you to the desktop you are on, instead of living on all of them. Swiping to another desktop showed Quill's window on the desktop being entered — mid-swipe it was on both — and then took it away once the swipe finished. The window was declared CanJoinAllSpaces: resident on every Space. That flag was there to buy one thing (the hotkey positions the window before showing it, and with an ordinary "home Space" that teleported the user to another desktop), at the cost of the window being everywhere. The chat is now the same non-activating NSPanel the frog is — MoveToActiveSpace plus FullScreenAuxiliary — so it arrives on the current desktop, over a full-screen app included, takes the keyboard without activating Quill, and stays behind on the old desktop when you swipe away. The style mask keeps `resizable` (an empty mask nails a borderless window shut), and the panel's own `window_did_resign_key` delegate is what puts it back in the tray now: a non-activating panel never activates the app, so Tauri's window-focus event does not fire on macOS and the Rust-side handler is the Windows half of the behaviour. Show/hide/visible went through one pair of helpers so the tray, the hotkey, Esc and the cross all take the same path. Tests read the panel's source and fail if MoveToActiveSpace, the non-activating mask or the focus-lost delegate goes missing, or if the hand-rolled CanJoinAllSpaces comes back.
 
 ## v0.1.43 — 2026-08-10
 
-- **A click on the pen drops the chat right under the icon**, and a click anywhere
+- A click on the pen drops the chat right under the icon, and a click anywhere
   else — or Esc — puts it back in the menu bar.
-- **The hotkey always opens the desk**, even when the window was left on settings.
+- The hotkey always opens the desk, even when the window was left on settings.
 
-  **The window hangs off the tray icon and closes when you look away.** Clicking the pen opened the chat wherever the window last sat — usually the middle of some other screen, so the click and the window were nowhere near each other. It now drops out from under the icon like that icon's own menu: centred beneath it, flipped above it when the icon sits at the bottom of the screen (a Windows taskbar), and pulled back inside the display when the icon is in a corner — the frog's geometry, ported with its tests (a second monitor is measured from its own origin, not from 0,0). A click anywhere else takes focus and the window goes back to the tray, one click from returning; Esc already did the same from the keyboard. The tray click carries the guard the frog needed for the same reason: the click that dismisses the window is also the click the icon handles, so without a "this just auto-hid" mark the icon could never close the window — it would hide and be shown right back. The hotkey path is untouched: it still opens the chat at the cursor, where the text being corrected is.
+  The window hangs off the tray icon and closes when you look away. Clicking the pen opened the chat wherever the window last sat — usually the middle of some other screen, so the click and the window were nowhere near each other. It now drops out from under the icon like that icon's own menu: centred beneath it, flipped above it when the icon sits at the bottom of the screen (a Windows taskbar), and pulled back inside the display when the icon is in a corner — the frog's geometry, ported with its tests (a second monitor is measured from its own origin, not from 0,0). A click anywhere else takes focus and the window goes back to the tray, one click from returning; Esc already did the same from the keyboard. The tray click carries the guard the frog needed for the same reason: the click that dismisses the window is also the click the icon handles, so without a "this just auto-hid" mark the icon could never close the window — it would hide and be shown right back. The hotkey path is untouched: it still opens the chat at the cursor, where the text being corrected is.
 
-  **The hotkey answers with the desk, never with settings.** The window keeps whatever view it was left on, so a hotkey pressed after a visit to settings showed the settings panel while the correction ran, unseen, behind it — the hotkey read as broken. The capture now brings the desk forward first.
+  The hotkey answers with the desk, never with settings. The window keeps whatever view it was left on, so a hotkey pressed after a visit to settings showed the settings panel while the correction ran, unseen, behind it — the hotkey read as broken. The capture now brings the desk forward first.
 
 ## v0.1.42 — 2026-08-10
 
-- **The window is a dictation desk now, not a chat.** Your text keeps its place
+- The window is a dictation desk now, not a chat. Your text keeps its place
   with the edits marked through it, and the finished version lies underneath on a
   sheet of paper — the one thing a click copies.
-- **The window opens bigger and keeps the size you drag it to.**
+- The window opens bigger and keeps the size you drag it to.
 
-  **The window stopped being a chat.** It was a tray-chat like every other LLM utility — rounded bubbles, an avatar, a blue send button — and the correction arrived as one bubble in which the marks and the finished text were the same paragraph. On a dictated page nobody could tell what a click would actually copy. The window is now a document under correction, in the world its own work comes from: a dictation desk. The transcript sits in typewriter mono the way the machine typed it, Quill's marks run through it in ribbon red (struck out for what it dropped, typed in for what it added, with the count of edits in the label), and underneath lies the finished text on the one sheet of paper in the window — the brightest surface there is, because it is the deliverable and the only thing a click copies. The paste-side bubble is gone: the transcript *is* what you pasted, and it gains its marks in place when the answer comes back, so nothing jumps. While the model reads, a ribbon runs under the transcript instead of three dots (and holds still under `prefers-reduced-motion`). "Already clean" is now one sheet with no marks above it rather than a dimmed bubble with a tag. Sheets stack up from the composer, so a single correction sits where the eye already is. The empty window says what to do — a blank ruled sheet naming the hotkey (read from the real binding, formatted by the shared `prettyShortcut`, not a second copy of it) and the composer. Settings and the debug log follow the same world: mono small-caps labels, hairline rules, no blue anywhere. Every foreground/background pair in the palette was measured rather than eyeballed; the labels that sat at 2.5:1 and 3.2:1 now clear 4.5:1.
+  The window stopped being a chat. It was a tray-chat like every other LLM utility — rounded bubbles, an avatar, a blue send button — and the correction arrived as one bubble in which the marks and the finished text were the same paragraph. On a dictated page nobody could tell what a click would actually copy. The window is now a document under correction, in the world its own work comes from: a dictation desk. The transcript sits in typewriter mono the way the machine typed it, Quill's marks run through it in ribbon red (struck out for what it dropped, typed in for what it added, with the count of edits in the label), and underneath lies the finished text on the one sheet of paper in the window — the brightest surface there is, because it is the deliverable and the only thing a click copies. The paste-side bubble is gone: the transcript *is* what you pasted, and it gains its marks in place when the answer comes back, so nothing jumps. While the model reads, a ribbon runs under the transcript instead of three dots (and holds still under `prefers-reduced-motion`). "Already clean" is now one sheet with no marks above it rather than a dimmed bubble with a tag. Sheets stack up from the composer, so a single correction sits where the eye already is. The empty window says what to do — a blank ruled sheet naming the hotkey (read from the real binding, formatted by the shared `prettyShortcut`, not a second copy of it) and the composer. Settings and the debug log follow the same world: mono small-caps labels, hairline rules, no blue anywhere. Every foreground/background pair in the palette was measured rather than eyeballed; the labels that sat at 2.5:1 and 3.2:1 now clear 4.5:1.
 
   A fresh-context design review then closed seven gaps in that build: the icons are drawn now (`icons.js`, one stroke weight — the gear, cross, prompt, arrows, remove and check had been Unicode glyphs, and a 16px gear reads as a sunburst, so settings took the machine's control panel instead); the clean sheet became a real control (`role="button"`, tabbable, Enter and Space copy it, ribbon-red focus ring) rather than a paragraph that listens for clicks; the settings view moved onto the desk's own grammar instead of the platform sans it had kept; the empty sheet is ruled rather than dashed and leads with the composer, since the window is the primary path; the send button lost its chip; and the mono stack names Consolas and Segoe UI Mono, without which every label on Windows fell through to generic monospace while the transcript stayed Courier New. The one finding left open is the pixel feather itself — the same file is the tray icon and the README's face, and it is the one cool-blue object left in a world whose own stylesheet says no blue.
 
   The direction was chosen against two alternates and the standing "just keep the dark chat" option — the prototypes are in `~/membeme/apps/quill/docs/design-directions.html`, the product record behind them in `PRODUCT.md`.
 
-  **The window remembers its size.** It opens at 520×700 now (was 420×580 — too small for a dictated page and its correction side by side) and keeps whatever size you drag it to, via Tauri's own `window-state` plugin rather than a hand-rolled config field. Position is saved too but only decides where it opens on launch: the hotkey still puts the window at the cursor, where the text being corrected is.
+  The window remembers its size. It opens at 520×700 now (was 420×580 — too small for a dictated page and its correction side by side) and keeps whatever size you drag it to, via Tauri's own `window-state` plugin rather than a hand-rolled config field. Position is saved too but only decides where it opens on launch: the hotkey still puts the window at the cursor, where the text being corrected is.
 
 ## v0.1.41 — 2026-08-10
 
-- **Left click on the pen opens the window.** Right click keeps the housekeeping:
+- Left click on the pen opens the window. Right click keeps the housekeeping:
   check for updates, the version, quit.
-- **Copying flashes the whole text**, the way Ribbit does, instead of a tick in
+- Copying flashes the whole text, the way Ribbit does, instead of a tick in
   the corner you have to go and look for.
 
-  **The left click opens the window, the right one opens the menu.** Quill was the odd one of the three: clicking the pen gave a menu whose first useful line was "Show Quill", while clicking the frog or the parrot gives you the app. The left button now toggles the chat directly (`TrayIconEvent::Click` on the button's release — the press is also what takes focus off an open window, and acting on both would toggle twice), and the menu, now right-button-only, keeps exactly the housekeeping: check for updates, the version, quit. The "Show Quill" item is gone with its label-rewriting; `toggle_chat_window` no longer takes a menu item to rename, and says so in the debug log if the window it was asked to raise is missing. Two tests read the file's own source (minus its test modules, or they would find their own quotes and pass over a deleted line) and fail if the menu ever climbs back onto the left button or the three items lose an id.
+  The left click opens the window, the right one opens the menu. Quill was the odd one of the three: clicking the pen gave a menu whose first useful line was "Show Quill", while clicking the frog or the parrot gives you the app. The left button now toggles the chat directly (`TrayIconEvent::Click` on the button's release — the press is also what takes focus off an open window, and acting on both would toggle twice), and the menu, now right-button-only, keeps exactly the housekeeping: check for updates, the version, quit. The "Show Quill" item is gone with its label-rewriting; `toggle_chat_window` no longer takes a menu item to rename, and says so in the debug log if the window it was asked to raise is missing. Two tests read the file's own source (minus its test modules, or they would find their own quotes and pass over a deleted line) and fail if the menu ever climbs back onto the left button or the three items lose an id.
 
-  **Copying flashes the whole text, the way Ribbit's log lines do.** The old signal was a `copied ✓` chip above the bubble's top-right corner — a thing you have to go and look for, in the one moment your eye is on the text you just took. The bubble now turns green as a whole: a wash behind it, the type in `--good`, and the diff marks pulled into the same colour so that for those 700ms it reads as one piece of text rather than a diff. It lands instantly (`.copied` kills the transition) and fades back over 0.2s. The flash ring is stated at the hover ring's weight and after it — the cursor is by definition on the bubble it just copied, so the blue hover ring would otherwise win. What lands in the clipboard is unchanged and pinned by a test: the correction, never the markup.
+  Copying flashes the whole text, the way Ribbit's log lines do. The old signal was a `copied ✓` chip above the bubble's top-right corner — a thing you have to go and look for, in the one moment your eye is on the text you just took. The bubble now turns green as a whole: a wash behind it, the type in `--good`, and the diff marks pulled into the same colour so that for those 700ms it reads as one piece of text rather than a diff. It lands instantly (`.copied` kills the transition) and fades back over 0.2s. The flash ring is stated at the hover ring's weight and after it — the cursor is by definition on the bubble it just copied, so the blue hover ring would otherwise win. What lands in the clipboard is unchanged and pinned by a test: the correction, never the markup.
 
 ## Up to v0.1.40
 
 Everything below shipped before the changelog was cut per release; the entries are in the order they were written, newest first.
 
-**The reply shows the edits, not just the result.** The chat used to answer a paragraph with a second, near-identical paragraph — spotting the corrections was the reader's job, and on a long text nobody did it. The reply bubble now marks them in place: added words carry a green underline, removed ones are struck through in red. `diff.js` is a word-level LCS diff (whitespace and punctuation are tokens of their own, so a missing comma is an edit of one character, not of the words around it), with the untouched head and tail shaved before the table is built — a one-word fix in a long paragraph costs nothing, and a text past 1500 changed tokens skips the diff and renders plain rather than hanging the window. A word that only changed case ("i" → "I") shows only its new form: the struck-through letter glued to its replacement made litter of every sentence opening. Copying still copies the correction, never the markup. The reply is also signed with the feather now — the same mark as the titlebar and the menu bar — so the two sides of the conversation read apart at a glance. Tests pin the invariant that matters: the correction is rebuildable from the marks exactly, and every real removal is marked.
+The reply shows the edits, not just the result. The chat used to answer a paragraph with a second, near-identical paragraph — spotting the corrections was the reader's job, and on a long text nobody did it. The reply bubble now marks them in place: added words carry a green underline, removed ones are struck through in red. `diff.js` is a word-level LCS diff (whitespace and punctuation are tokens of their own, so a missing comma is an edit of one character, not of the words around it), with the untouched head and tail shaved before the table is built — a one-word fix in a long paragraph costs nothing, and a text past 1500 changed tokens skips the diff and renders plain rather than hanging the window. A word that only changed case ("i" → "I") shows only its new form: the struck-through letter glued to its replacement made litter of every sentence opening. Copying still copies the correction, never the markup. The reply is also signed with the feather now — the same mark as the titlebar and the menu bar — so the two sides of the conversation read apart at a glance. Tests pin the invariant that matters: the correction is rebuildable from the marks exactly, and every real removal is marked.
 
-**The pixel feather replaces the generic glyph.** The old icon was a white feather on a purple squircle — a plate, where the frog and the parrot are cut out on transparency. The new one is the pixel-art feather from the same set as the other two beasts, background removed by luminance with the dark backdrop unmultiplied out of the soft edge (no grey halo), and the whole `icons/` set regenerated from it. The same file is the app's face in the README. `tray-update.png` carries the green badge top-right, as everywhere; the feather stands down to 88% there so its tip does not end up under the dot.
+The pixel feather replaces the generic glyph. The old icon was a white feather on a purple squircle — a plate, where the frog and the parrot are cut out on transparency. The new one is the pixel-art feather from the same set as the other two beasts, background removed by luminance with the dark backdrop unmultiplied out of the soft edge (no grey halo), and the whole `icons/` set regenerated from it. The same file is the app's face in the README. `tray-update.png` carries the green badge top-right, as everywhere; the feather stands down to 88% there so its tip does not end up under the dot.
 
-**Closing the window no longer kills the app.** The window was destroyed on close (the cross, or ⌘W — macOS installs its own Close item whenever an app sets no menu of its own), and Quill has exactly one window: with it gone the hotkey opened nothing, the tray item opened nothing, and Tauri, seeing no windows left, exited the process — menu-bar icon and all. Closing now hides. A test reads `tauri.conf.json` and fails if a window is declared there without a hide-on-close guard, so the next window cannot reintroduce this; `core:window:allow-close` is also gone from the capabilities, so the frontend cannot destroy the window either.
+Closing the window no longer kills the app. The window was destroyed on close (the cross, or ⌘W — macOS installs its own Close item whenever an app sets no menu of its own), and Quill has exactly one window: with it gone the hotkey opened nothing, the tray item opened nothing, and Tauri, seeing no windows left, exited the process — menu-bar icon and all. Closing now hides. A test reads `tauri.conf.json` and fails if a window is declared there without a hide-on-close guard, so the next window cannot reintroduce this; `core:window:allow-close` is also gone from the capabilities, so the frontend cannot destroy the window either.
 
-**The debug log records events, not writing.** It carried a 60-character preview of the selected text and of the correction, appended forever, swept by nothing — the retention sweep only ever looked at `*.jsonl`, so "keep 7 days" was a promise the app did not keep for this file. Lines now say how many characters were corrected, not which ones, and the file starts empty on every launch. The correction itself still lives in the history, where it expires.
+The debug log records events, not writing. It carried a 60-character preview of the selected text and of the correction, appended forever, swept by nothing — the retention sweep only ever looked at `*.jsonl`, so "keep 7 days" was a promise the app did not keep for this file. Lines now say how many characters were corrected, not which ones, and the file starts empty on every launch. The correction itself still lives in the history, where it expires.
 
-**A config that cannot be parsed is set aside, not overwritten.** A half-written `config.json` (a crash mid-save, a full disk) parsed to nothing, which looks exactly like a fresh install to the provider migration — which then re-seeded the stack and saved over the file, taking the endpoints and the key slots with it. The unreadable file is now kept as `config.broken.json` and the migration is a pure function with tests (fresh install seeds Groq first, an older single-provider install keeps its provider as the backup, a config that already has a stack is left alone, and running it twice changes nothing).
+A config that cannot be parsed is set aside, not overwritten. A half-written `config.json` (a crash mid-save, a full disk) parsed to nothing, which looks exactly like a fresh install to the provider migration — which then re-seeded the stack and saved over the file, taking the endpoints and the key slots with it. The unreadable file is now kept as `config.broken.json` and the migration is a pure function with tests (fresh install seeds Groq first, an older single-provider install keeps its provider as the backup, a config that already has a stack is left alone, and running it twice changes nothing).
 
-**Security pass across the three apps.**
+Security pass across the three apps.
 
-- **The dev-only key bootstrap is gone.** A release build read `~/membeme/system/secrets/routerai.key` on startup and seeded the key from it — a personal path baked into a public binary, and dev behaviour that had no business shipping. The key is pasted in the settings panel, like every other one.
-- **Config, history and the session log are written owner-only (0600), folders 0700** — via the new `private.rs`, shared in shape with Ribbit and CopyPaster. `secrets.rs` used to write the key and *then* chmod it, leaving a window where the token was on disk and world-readable; the mode is now set on the open handle before the key goes in.
-- **A provider endpoint must be `https://`** — an `http://` endpoint sent the API key across the network in the clear on every correction. Refused when typed, with a test.
-- **Content-Security-Policy is set** (`default-src 'self'`; no remote script, image or connection). Quill's frontend never touches the network — Rust does — so an injected script has nowhere to send the selection or the key. Checked against the real policy in a headless webview: no violations.
-- **Every GitHub action is pinned to a commit SHA**, and the updater signing key reaches only the step that signs. Dependabot watches the pins. These jobs hold the key that signs auto-updates.
+- The dev-only key bootstrap is gone. A release build read `~/membeme/system/secrets/routerai.key` on startup and seeded the key from it — a personal path baked into a public binary, and dev behaviour that had no business shipping. The key is pasted in the settings panel, like every other one.
+- Config, history and the session log are written owner-only (0600), folders 0700 — via the new `private.rs`, shared in shape with Ribbit and CopyPaster. `secrets.rs` used to write the key and *then* chmod it, leaving a window where the token was on disk and world-readable; the mode is now set on the open handle before the key goes in.
+- A provider endpoint must be `https://` — an `http://` endpoint sent the API key across the network in the clear on every correction. Refused when typed, with a test.
+- Content-Security-Policy is set (`default-src 'self'`; no remote script, image or connection). Quill's frontend never touches the network — Rust does — so an injected script has nowhere to send the selection or the key. Checked against the real policy in a headless webview: no violations.
+- Every GitHub action is pinned to a commit SHA, and the updater signing key reaches only the step that signs. Dependabot watches the pins. These jobs hold the key that signs auto-updates.
 
-**The README shows the app instead of describing it.** Two screenshots, taken by the harness (`_quill_shot.mjs`, now with `SHOT=chat|providers` like Ribbit's): the chat with a real English and a real Russian correction plus an "already clean" pair, and the model stack with the fallback knobs. Prose in both feature sections cut to two lines each.
+The README shows the app instead of describing it. Two screenshots, taken by the harness (`_quill_shot.mjs`, now with `SHOT=chat|providers` like Ribbit's): the chat with a real English and a real Russian correction plus an "already clean" pair, and the model stack with the fallback knobs. Prose in both feature sections cut to two lines each.
 
-**The pen in the menu bar carries the update, like the frog and the parrot.** A left click on the tray icon now opens a menu — *Check for updates*, *Show Quill*, the version, *Quit* — instead of toggling the window. The one update item turns into "Update to vX.Y.Z" once a release is found, and the tray icon takes a green badge (`icons/tray-update.png`); a test fails if that icon ever ships without its `#2ecc71` pixels.
+The pen in the menu bar carries the update, like the frog and the parrot. A left click on the tray icon now opens a menu — *Check for updates*, *Show Quill*, the version, *Quit* — instead of toggling the window. The one update item turns into "Update to vX.Y.Z" once a release is found, and the tray icon takes a green badge (`icons/tray-update.png`); a test fails if that icon ever ships without its `#2ecc71` pixels.
 
 The update button is gone from the settings panel, and so is the glowing gear: the tray is visible all day, the settings panel is opened about once a month. `check_for_update` / `install_update` are no longer commands — nothing in the window asks for them. The background poll calls the same `announce_update()` as the manual check, so a release found either way gives the same signal.
 
-**The README is a shop window, not a manual.** Same shape as Ribbit and CopyPaster now: three fat download buttons at the top, the "older versions" link pointing at `/releases` (every version — so a bad build can be rolled back) rather than `/releases/latest` (one release and its files), and the stack / build / tests / signing moved to `docs/DEVELOPMENT.md`. The old page also claimed the API key lives in the OS keychain — it lives in a private 0600 file, and `secrets.rs` explains at length why that was deliberate.
+The README is a shop window, not a manual. Same shape as Ribbit and CopyPaster now: three fat download buttons at the top, the "older versions" link pointing at `/releases` (every version — so a bad build can be rolled back) rather than `/releases/latest` (one release and its files), and the stack / build / tests / signing moved to `docs/DEVELOPMENT.md`. The old page also claimed the API key lives in the OS keychain — it lives in a private 0600 file, and `secrets.rs` explains at length why that was deliberate.
 
 ## 0.1.30 — no Dock icon
 
-**Was.** Quill showed up in the Dock and in Cmd-Tab like a regular app, unlike
+Was. Quill showed up in the Dock and in Cmd-Tab like a regular app, unlike
 Ribbit and CopyPaster. Nothing chose that: it is what macOS does by default, and
 the one line that says otherwise was never added here. Beyond the clutter, a
 regular app *activates itself* when its window appears — pulling focus off the
 text the user is correcting, which is exactly what Quill must not do.
 
-**Now.** `ActivationPolicy::Accessory` in `setup()` (macOS-only), same as Ribbit:
+Now. `ActivationPolicy::Accessory` in `setup()` (macOS-only), same as Ribbit:
 menu-bar utility, no Dock icon, no Cmd-Tab entry. The tray icon is how you reach
 it, as before.
 
 ## 0.1.29 — the window stops rubber-banding
 
-**Was.** A two-finger swipe anywhere in the window elastically dragged the whole
+Was. A two-finger swipe anywhere in the window elastically dragged the whole
 page: the app "skin" slid inside its own frame and bared what sat behind the
 window. Since the window is borderless + `transparent: true` (that's what gives
 the rounded macOS corners), the exposed strip showed the desktop — read as white
@@ -133,29 +133,29 @@ gaps along the edges. WKWebView rubber-bands the document by default; nothing in
 the CSS forbade it. CopyPaster already had the guard, Quill and Ribbit never got
 it.
 
-**Now.** `html, body` are pinned — `height: 100%`, `overflow: hidden`,
+Now. `html, body` are pinned — `height: 100%`, `overflow: hidden`,
 `overscroll-behavior: none` — so the document can neither scroll nor bounce. The
 three scroll regions (`.log`, `.view-panel`, `#debug-content`) get
 `overscroll-behavior: contain`, so hitting the end of a list doesn't chain the
 gesture up to the document.
 
-**Tests.** `src/window_chrome.test.js` reads `editor.css` and fails if the root
+Tests. `src/window_chrome.test.js` reads `editor.css` and fails if the root
 block or any scroller loses its rule — the bug itself only reproduces on a real
 macOS build, so the CSS is pinned instead of eyeballed. `npm test` 9 pass.
 Settings screenshotted after the change: layout unchanged.
 
-**Elsewhere.** Same guard applied to Ribbit; the `vibe-apps` skill now carries the
+Elsewhere. Same guard applied to Ribbit; the `vibe-apps` skill now carries the
 root block as a copy-paste baseline plus a "what must never happen" checklist for
 new apps.
 
 ## 0.1.28 — model stack: endpoint + model per card, Groq, auto-fallback
 
-**Was.** The settings "Model" dropdown picked a *provider*, not a model: base url
+Was. The settings "Model" dropdown picked a *provider*, not a model: base url
 and model id were compile-time constants in `corrector::PROVIDERS`. No way to
 point Quill at a different model on the same provider, at a self-hosted endpoint,
 or at Groq at all. A rate-limited or dead provider failed the correction outright.
 
-**Now.** `config.json` holds an ordered `providers` stack (`fallback.rs`, ported
+Now. `config.json` holds an ordered `providers` stack (`fallback.rs`, ported
 from Ribbit — which runs the same machine over two stacks; Quill has one, so the
 `Stack` selector is gone and the state is a single global). Each entry is
 `{id, label, url, model, key_env}`; endpoint, model id and key are editable per
@@ -165,34 +165,34 @@ correction the user is waiting on still lands. Repeated transient failures
 (threshold, default 2) stick the switch until a cooldown (default 60 min) snaps
 back to the first card; both knobs are in settings.
 
-- **Failure classification** (`fallback::classify`, the one place the rule lives):
+- Failure classification (`fallback::classify`, the one place the rule lives):
   429 / 5xx / timeout / transport → `Switch` (try the backup). 4xx and an
   unusable-but-200 body → `Hard`, surfaced immediately: a bad key/url/model is a
   config bug to see, not something to mask behind a slower backup.
-- **Groq added to the catalog** — `https://api.groq.com/openai/v1/chat/completions`,
+- Groq added to the catalog — `https://api.groq.com/openai/v1/chat/completions`,
   default `llama-3.3-70b-versatile`; `meta-llama/llama-4-scout-17b-16e-instruct`
   is the 17B alternative (both ids verified live against Groq's `/models`). LPU
   inference lands a 70B answer in well under a second, so it's the new primary.
-- **Custom endpoints** — the "+ add model" picker has a `custom…` option: blank
+- Custom endpoints — the "+ add model" picker has a `custom…` option: blank
   url/model and its own key slot (`QUILL_KEY_<id>`).
-- **Keys** stay in the private 0600 config file, now one slot per stack entry.
+- Keys stay in the private 0600 config file, now one slot per stack entry.
   `secrets::load_into_env` takes the slots from the configured stack instead of
   the catalog, so a custom entry's key loads too.
-- **Migration** — `migrate_providers()` runs at launch, no-op once the stack
+- Migration — `migrate_providers()` runs at launch, no-op once the stack
   exists: seeds Groq first with the previous `llm_provider` behind it as backup,
   reusing the key already on disk. Groq starts keyless, and a keyless entry is
   skipped by the walk, so corrections keep running on the backup until a Groq key
   is pasted — the update can't break a working install.
-- **UI** — model cards (name + `first` tag, ↑/↓ reorder, ✕ remove, endpoint /
+- UI — model cards (name + `first` tag, ↑/↓ reorder, ✕ remove, endpoint /
   model / key rows) inside the settings overlay, in its existing row rhythm, plus
   a live "⚡ running on <backup> · first choice retried in ~N min" line so an
   active fallback is never silent. Dead commands (`set_api_key`,
   `set_llm_provider`, `list_llm_providers`) removed.
-- **CSS gotcha worth remembering:** `input[type="text"]` is attribute-specific, so
+- CSS gotcha worth remembering: `input[type="text"]` is attribute-specific, so
   a single-class rule loses to it — the card inputs need `.provider-field
   .provider-input` to beat the panel's 60% width cap.
 
-**Tests.** `cargo test --lib` — 32 pass, incl. 13 new in `fallback.rs` (classify
+Tests. `cargo test --lib` — 32 pass, incl. 13 new in `fallback.rs` (classify
 transient vs hard; threshold/cooldown transitions; `run_with_failover`: rescue by
 the next entry inside one request, hard error stops the walk, keyless entries
 skipped without counting as failures, deep failures don't feed the sticky tally)
@@ -233,9 +233,9 @@ stays unambiguous whatever the accent becomes.
 
 ## 0.1.25 — stop button: cancel a running correction
 
-**Report.** After sending, there's no way to cancel — you wait out the request.
+Report. After sending, there's no way to cancel — you wait out the request.
 
-**Fix.** While a correction is in flight the send arrow becomes a red rounded
+Fix. While a correction is in flight the send arrow becomes a red rounded
 "stop" square. Clicking it (or Esc) drops the pending bubble and returns to the
 composer. The correction is a single non-streaming request, so "stop" is a UI
 cancel: the in-flight call's result is discarded (its bubble already removed) and
@@ -250,20 +250,20 @@ discarded result can't slip into the chat after you've stopped.
 
 ## 0.1.24 — chat opens on the current Space (no desktop teleport)
 
-**Report.** The hotkey "moves me to another desktop" and shows the chat there
+Report. The hotkey "moves me to another desktop" and shows the chat there
 instead of popping it where I'm working.
 
-**Cause.** We position the window at the cursor *before* showing it. The window
+Cause. We position the window at the cursor *before* showing it. The window
 carried `MoveToActiveSpace` (the same behavior Ribbit uses), but Ribbit never
 repositions its window — we do, and positioning a still-hidden window that has a
 "home" Space, then showing it, teleported the user to that home Space.
 
-**Fix.** `apply_spaces_behavior` now sets `CanJoinAllSpaces` (1<<0) instead of
+Fix. `apply_spaces_behavior` now sets `CanJoinAllSpaces` (1<<0) instead of
 `MoveToActiveSpace` (1<<1). With no home Space the window is resident on every
 Space, so showing it at the cursor always lands on the current desktop. It's
 hidden between uses, so "on every Space" is never visible.
 
-**Capture status (from the 0.1.23 debug log, for the record).** The 0.1.23 ⌘C
+Capture status (from the 0.1.23 debug log, for the record). The 0.1.23 ⌘C
 fix works: `frontmost: com.quill.app → captured 62 chars`. The one case that
 still yields `0 chars` is a selection made *inside* a TUI like Claude Code
 running in Ghostty: that selection lives inside the TUI's own redraw (mouse
@@ -274,24 +274,24 @@ Quill bug, so nothing to fix here — documented so it isn't re-chased.
 
 ## 0.1.23 — capture actually works: ⌘C posted with the Command flag set
 
-**The real capture bug, found in the on-disk debug log.** With 0.1.22 signed and
+The real capture bug, found in the on-disk debug log. With 0.1.22 signed and
 Accessibility granted, the hotkey still captured nothing. The log was decisive:
 `hotkey fired → capturing selection` immediately followed by `captured 0 chars`,
-on **every** attempt across **every** build going back weeks — and crucially, the
+on every attempt across every build going back weeks — and crucially, the
 need-access path was *not* taken (so trust was fine). So it was never signing and
 never permission: the synthetic ⌘C itself copied nothing.
 
-**Why.** `selection.rs` synthesized the copy via enigo as three events — press
+Why. `selection.rs` synthesized the copy via enigo as three events — press
 ⌘, click C, release ⌘. In many apps (terminals like Ghostty/Terminal, Electron)
 the Command flag never landed on the C key event, so the app saw a bare "c", the
 copy never fired, and the clipboard stayed the sentinel → `captured 0 chars`.
 
-**Confirmed before shipping, on the same Mac.** A probe drove a properly-flagged
+Confirmed before shipping, on the same Mac. A probe drove a properly-flagged
 synthetic ⌘C (System Events `keystroke "c" using command down`) over a scratch
 selection: the clipboard picked up the text. So a *flagged* ⌘C copies here; the
 unflagged enigo chord was the bug.
 
-**The fix.** macOS now posts ⌘C as a raw `CGEvent` with `CGEventFlagCommand` set
+The fix. macOS now posts ⌘C as a raw `CGEvent` with `CGEventFlagCommand` set
 directly on the C key event (keycode `0x08`, kVK_ANSI_C) — the synthesis every
 selection-grabbing tool relies on. The app reads the flag off the event, so it's
 a real ⌘C regardless of layout or which modifiers are physically held. Windows/
@@ -302,17 +302,17 @@ Linux keep enigo's Ctrl+C.
   future `0 chars` is traceable to the exact app it targeted.
 - `core-graphics` added as a direct dep (already in the tree via cocoa).
 - This is a cert-to-cert update (same signing identity as 0.1.22), so it does
-  **not** reset the Accessibility grant — no re-enable needed, and it doubles as
+  not reset the Accessibility grant — no re-enable needed, and it doubles as
   the first clean update to check whether the VPN now survives.
 
 ## 0.1.21 — stable self-signed signing (Accessibility grant survives updates), normal window
 
-**Three reports.** (1) The window floated above every other window — couldn't be
+Three reports. (1) The window floated above every other window — couldn't be
 sent behind. (2) After an update the selection wasn't captured: the chat opened
 empty and the user had to paste by hand. (3) The VPN still dropped on the 0.1.20
 update.
 
-**0.1.20's keychain theory was wrong — corrected here.** The debug log after the
+0.1.20's keychain theory was wrong — corrected here. The debug log after the
 0.1.20 update shows *no* `loaded … from keychain` line (the new file-based build
 never touched the keychain) yet the VPN dropped anyway → keychain wasn't the
 cause. `tccutil` is ruled out too: Ribbit's `tcc_reset.rs` is byte-identical and
@@ -320,26 +320,26 @@ its log resets TCC on every update, but Ribbit's VPN never drops. So both prior
 suspects are eliminated by evidence. (Keychain→file from 0.1.20 stays — it does
 kill the post-update password prompt — it just wasn't the VPN trigger.)
 
-**Real root cause (capture + the VPN's last lead): ad-hoc signing.** Each ad-hoc
+Real root cause (capture + the VPN's last lead): ad-hoc signing. Each ad-hoc
 release gets a fresh cdhash, and a TCC grant's designated requirement pins that
 cdhash. So after every update the Accessibility grant goes stale: System Settings
 still shows Quill "allowed", `AXIsProcessTrusted()` returns true, but the
 synthetic ⌘C is filtered at kCGHIDEventTap → `captured 0 chars`. The debug log
 (is_trusted true, 0 chars) and the screenshot (Quill toggled on) confirm it. This
-is also the **only** remaining Quill-vs-Ribbit difference for the VPN: Quill is
+is also the only remaining Quill-vs-Ribbit difference for the VPN: Quill is
 the one that needs the most-privileged grant (Accessibility) re-issued every
 update; Ribbit only needs Microphone.
 
-**The fix — stable self-signed certificate.** CI now signs both macOS arches with
+The fix — stable self-signed certificate. CI now signs both macOS arches with
 a self-signed code-signing cert (secrets `APPLE_CERTIFICATE` /
 `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`). The designated
-requirement then anchors to the **certificate**
+requirement then anchors to the certificate
 (`identifier "com.quill.app" and certificate root = H"…"`), not the cdhash — so
 the Accessibility grant survives every update and the selection capture keeps
 working. Not notarized (no Apple account), so first launch still needs a
 right-click→Open, exactly like the old ad-hoc builds.
 
-**0.1.21's macOS build failed on signing — fixed in 0.1.22.** A self-signed cert
+0.1.21's macOS build failed on signing — fixed in 0.1.22. A self-signed cert
 isn't a *valid* codesigning identity until its root is trusted; tauri-action's own
 `APPLE_CERTIFICATE` import doesn't add that trust, so the bundler aborted with
 `failed to resolve signing identity` (reproduced locally: `codesign --sign` →
@@ -349,7 +349,7 @@ keychain via passwordless `sudo` (no GUI auth on the runner); the bundler then g
 only `APPLE_SIGNING_IDENTITY`. So 0.1.21 shipped Windows-only; the first real signed
 macOS build is 0.1.22.
 
-- `tcc_reset.rs` rekeyed off the **signing identity** instead of the cdhash: it
+- `tcc_reset.rs` rekeyed off the signing identity instead of the cdhash: it
   resets once on the ad-hoc→cert migration (clears the stale ad-hoc grant so the
   user gets a clean prompt), then never again across cert-signed builds. Keying
   off cdhash would have wiped the good grant on every release.
@@ -369,24 +369,24 @@ cert-to-cert update).
 
 ## 0.1.20 — store the API key in a file, not the macOS Keychain
 
-**The symptom.** Every Quill update (a) re-prompted for the macOS login password
+The symptom. Every Quill update (a) re-prompted for the macOS login password
 and (b) dropped the user's corporate VPN (the 2FA-push one). A plain relaunch of
 the *same* binary did neither; running `tccutil reset All com.quill.app` by hand
-did neither. So the trigger was something Quill does **only on update** that
+did neither. So the trigger was something Quill does only on update that
 Ribbit — same updater, same ad-hoc per-arch signing, VPN never drops — does not.
 
-**The difference, found by diffing the two apps.** Build/signing/Info.plist/
+The difference, found by diffing the two apps. Build/signing/Info.plist/
 updater/restart are byte-identical between Quill and Ribbit (so stable signing
 was a dead end — Ribbit isn't stably signed either). The one functional
-divergence: **Quill kept the API key in the macOS Keychain (`keyring` crate);
-Ribbit keeps it in a config file.** An ad-hoc binary's signature rotates each
+divergence: Quill kept the API key in the macOS Keychain (`keyring` crate);
+Ribbit keeps it in a config file. An ad-hoc binary's signature rotates each
 release, and a Keychain ACL is anchored to that signature — so the first launch
-after an update hits an ACL **mismatch** and macOS does a heavier "signature
+after an update hits an ACL mismatch and macOS does a heavier "signature
 changed, re-authorize" pass on the login keychain. That lines up exactly with
 both the password prompt and the VPN (whose 2FA session lives in the same login
 keychain) dropping on every update.
 
-**The fix (Ribbit's approach).** Store the key in `config_dir/quill/.env`,
+The fix (Ribbit's approach). Store the key in `config_dir/quill/.env`,
 written `0600`. Dropped the `keyring` dependency; `secrets.rs` now reads/writes
 that file with the same public API (`load_into_env` / `save` / `has_key`), so
 lib.rs callers are unchanged. An API key can't be hashed (it's sent to the
@@ -403,18 +403,18 @@ now survives an update is verified on the next update.
 
 ## 0.1.19 — gear always reachable: titlebar stays, the body swaps views
 
-**What was wrong.** 0.1.18 made settings a full-cover overlay (`position:absolute;
+What was wrong. 0.1.18 made settings a full-cover overlay (`position:absolute;
 inset:0`), which painted over the titlebar too — so once in settings the gear was
 gone and there was no way to flip back to the chat/log. (Also two minor CI/build
 follow-ups landed as 0.1.18.x.)
 
-**The fix — Ribbit's real structure.** The titlebar is now persistent; only the
+The fix — Ribbit's real structure. The titlebar is now persistent; only the
 body below it swaps between three views:
 - `setView("chat"|"settings"|"debug")` toggles `#log`+`#composer` vs
   `#settings-panel` vs `#debug-panel` (each a `.view-panel` flex child, not an
   overlay). The gear lives in the always-visible titlebar, so it flips chat ↔
   settings from either side; it shows an `.active` tint while in settings.
-- **Status moved into the titlebar** (under the wordmark), so "Ключ сохранён" /
+- Status moved into the titlebar (under the wordmark), so "Ключ сохранён" /
   "Hotkey: …" is visible from any view.
 - Debug log is a third view reached from settings (`>_`) with its own back; Esc
   peels debug → settings → chat → hide window. Capture still owns Esc via
@@ -428,26 +428,26 @@ hides in settings; the gear toggles back to chat; Esc peels each layer. `vitest`
 
 ## 0.1.18 — one window: the gear flips settings over the chat, no second window
 
-**What was wrong.** 0.1.17 made the chat the app's face but kept settings as a
+What was wrong. 0.1.17 made the chat the app's face but kept settings as a
 *separate* window — so clicking the gear opened a second window. The user wanted
 one window that switches between the chat (text + history) and settings, exactly
 like Ribbit (its gear swaps the log view for a settings view in place).
 
-**The fix — settings is an in-window overlay.**
+The fix — settings is an in-window overlay.
 - The gear now flips a `#settings-panel` overlay over the chat (and a `>_` debug
   overlay above that), the same way the chat already overlaid its debug log.
   `showView`-style toggling, one window — mirrors Ribbit's gear behaviour.
-- **Esc peels back one layer**: debug → settings → hide the window. While a
+- Esc peels back one layer: debug → settings → hide the window. While a
   shortcut capture is live, settings.js owns Esc (cancels capture) — editor.js
   defers via the `.capturing` class on the kbd.
-- The settings **window is gone**. Removed the `main` window from
+- The settings window is gone. Removed the `main` window from
   `tauri.conf.json`; the chat (`editor`) is the only window, sized 420×580 to
   fit both views. Rounded-corners / Spaces polish now applies to it alone.
-- **Frontend consolidated.** Settings logic moved out of the deleted
+- Frontend consolidated. Settings logic moved out of the deleted
   `main.js`/`index.html`/`styles.css` into a new `settings.js` module
   (`initSettings()`), imported by `editor.js`; its styles ported into
   `editor.css` as `.panel` overlays. `shortcut.js` is shared by both.
-- **Backend trimmed.** Removed the now-dead commands `show_main_window`,
+- Backend trimmed. Removed the now-dead commands `show_main_window`,
   `hide_to_tray`, `show_from_tray`, `set_always_on_top` and the `show-settings`
   event. First-run onboarding reveals the chat window; editor.js sees the
   missing API key and opens the settings overlay itself (no cross-window event).
@@ -459,20 +459,20 @@ console errors.
 
 ## 0.1.17 — the chat is the only face; the old clock-log window is gone
 
-**The regression it fixes.** Every update restarts the app, and on launch the
+The regression it fixes. Every update restarts the app, and on launch the
 *settings* window (which still carried the old clock-rewind history list) popped
 up on its own. So after updating, the user saw the thing we'd replaced — a log
 with clock tongues, no composer, no chat — and reasonably thought the chat was
 gone. The chat was fine; it was just a second window that only opened on the
 hotkey, while the wrong window greeted them on launch.
 
-**The fix — collapse to one face.**
-- The **chat is the app**. The tray icon (click + "Show" menu) now toggles the
+The fix — collapse to one face.
+- The chat is the app. The tray icon (click + "Show" menu) now toggles the
   chat window, not settings. The hotkey already opened the chat.
-- **Nothing pops on launch.** Both windows are `visible: false`; Quill lives in
+- Nothing pops on launch. Both windows are `visible: false`; Quill lives in
   the tray. The sole exception is genuine first-run with no API key, which opens
   settings so the hotkey isn't a dead end.
-- The **settings window is settings only**. Removed the clock-rewind history
+- The settings window is settings only. Removed the clock-rewind history
   list and the search box from it (and their dead CSS) — there are no clock
   tongues anywhere now. It opens only from the chat's gear (`show_main_window`).
 - Tray retarget: `toggle_main_window` → `toggle_chat_window` (targets the editor
@@ -483,9 +483,9 @@ model / key / hotkey / update / debug.
 
 ## 0.1.16 — blank when empty; day separators in the chat (Ribbit parity)
 
-- **Empty chat is empty.** Dropped the "select text and press ⌃⌥E" greeting.
+- Empty chat is empty. Dropped the "select text and press ⌃⌥E" greeting.
   First open with no history shows nothing — like Ribbit's log.
-- **Day separators.** Between calendar days the chat now draws a thin rule with
+- Day separators. Between calendar days the chat now draws a thin rule with
   a small `we, jun 25th` label (weekday + month + ordinal day). Ported verbatim
   from Ribbit's `formatDate` + `.date-sep`, placed in chat order (a day's
   separator heads its first message, oldest day at top).
@@ -505,7 +505,7 @@ then re-arm for retry.
 The editor popup becomes a chat, and the two things that still felt broken
 after 0.1.13 are fixed.
 
-**What was wrong.**
+What was wrong.
 - The popup opened on whichever Space it last lived on. The user pressed the
   hotkey, saw nothing, and only later found the window on another desktop.
 - The 0.1.13 "grant Accessibility" screen was a half-screen overlay that
@@ -514,17 +514,17 @@ after 0.1.13 are fixed.
 - Typing the corrected text back over the selection was the fragile half of
   the Accessibility story. Copying needs none of that reach.
 
-**The redesign.**
+The redesign.
 - `editor.*` is now a chat. The captured selection lands as your bubble (accent,
   right); the correction replies below it (panel, left). A composer at the
   bottom takes typed/pasted text — Enter sends, Shift+Enter newlines — through
   the same correct→reply path, so re-polishing is: click your bubble (copies),
-  paste, tweak, Enter. **Click any bubble to copy it** to the clipboard; you
+  paste, tweak, Enter. Click any bubble to copy it to the clipboard; you
   paste it yourself. No more type-back, no clock-to-rewind tongues.
-- **Window opens at the mouse cursor**, clamped to the cursor's screen, on the
+- Window opens at the mouse cursor, clamped to the cursor's screen, on the
   active Space. New `mac_window::position_at_cursor` (`NSEvent.mouseLocation` +
   `NSScreen.visibleFrame`), run on the main thread before `show()`.
-- **No in-app permission overlay.** When Accessibility isn't granted the hotkey
+- No in-app permission overlay. When Accessibility isn't granted the hotkey
   pops the real macOS dialog and shows the chat with one quiet inline note
   (`editor:need-access`).
 - Dropped the type-back path: removed `inserter.rs`, `mac_focus.rs`,
@@ -544,7 +544,7 @@ Accessibility — but that is now the *only* thing that does.
 
 The recurring "Quill doesn't work after an update" finally fixed at the root.
 
-**The bug.** Each release rotates the ad-hoc cdhash, so `tcc_reset` wipes the
+The bug. Each release rotates the ad-hoc cdhash, so `tcc_reset` wipes the
 Accessibility grant — and then the hotkey would capture the selection with a
 synthetic ⌘C that macOS silently filters (no permission), get nothing, and
 *open no window at all*. From the user's seat: press the hotkey, nothing
@@ -552,19 +552,19 @@ happens, no hint why. The old code assumed macOS would re-prompt on the next
 synthetic keystroke; it doesn't — posting an event without the grant just fails
 quietly, it never triggers a prompt.
 
-**The fix.**
+The fix.
 - New `accessibility.rs`: `is_trusted()` (`AXIsProcessTrusted`) and `prompt()`
   (`AXIsProcessTrustedWithOptions` with the prompt option) — the latter pops the
   real macOS "allow Quill to control this computer" dialog. Needs the
   `core-foundation` crate + the ApplicationServices framework.
-- `launch_editor` rewritten so **the window always opens**. If we're not trusted
+- `launch_editor` rewritten so the window always opens. If we're not trusted
   it pops the macOS dialog and shows the editor on a "grant access" screen
   instead of attempting a doomed silent ⌘C. If we are trusted it captures and
   opens as before — and now even an *empty* capture opens the window (type/paste)
   rather than dying.
 - Editor gains a permission screen (`editor:permission` event): explains it needs
-  Accessibility, with **Open System Settings** (`open_accessibility_settings`)
-  and **I've enabled it → retry** (`accessibility_status`) buttons.
+  Accessibility, with Open System Settings (`open_accessibility_settings`)
+  and I've enabled it → retry (`accessibility_status`) buttons.
 
 After an update the flow is now Ribbit-like: press the hotkey → macOS asks for
 the grant → enable Quill → it works. No more silent dead key press.
@@ -578,25 +578,25 @@ longer hides the problem.
 Front-end only again; same data, same Rust. Brings the main window the rest of
 the way to Ribbit's minimalism.
 
-- **Search (magnifier in the header).** A live filter popup, like Ribbit — but
+- Search (magnifier in the header). A live filter popup, like Ribbit — but
   it matches the *original* text too, not just the corrected result. A row stays
   if the query hits either side; matches are highlighted (`<mark>`). When the hit
-  is only in the original (hidden under the clock), the **clock lights up** so you
+  is only in the original (hidden under the clock), the clock lights up so you
   know to hold it — and holding reveals the original with the match highlighted.
   Substring match, case-insensitive. `entryMatchesQuery`/`highlightInto`/
   `applySearch`/`renderRowText` in main.js; `#search-btn` + `#search-popup`.
-- **Updates work exactly like Ribbit now.** The standalone footer button is gone
+- Updates work exactly like Ribbit now. The standalone footer button is gone
   (the whole footer is); the update control lives in settings, and when a release
-  is found the **gear glows green** so you spot it from the log without opening
+  is found the gear glows green so you spot it from the log without opening
   settings. Inside, the button shows `update to vX`, then `downloading N%` on the
   button itself, then the app restarts. `setupUpdates` rewritten as a clean
   swap-the-onclick state machine (check ⇄ install) to avoid Ribbit's
   double-handler quirk; `.update-available` glow on both `#update-btn` and
   `#settings-btn`.
-- **Minimalist header.** Dropped the persistent "Ready" — the status subtitle is
+- Minimalist header. Dropped the persistent "Ready" — the status subtitle is
   empty (and hidden) at rest, surfacing only while a correction or download is in
   flight, then clearing. Just "Quill" the rest of the time.
-- **Empty state actually centers.** It used to share the column with the
+- Empty state actually centers. It used to share the column with the
   (empty) list and drift below middle; the list is hidden when there are no
   entries, so the welcome sits dead-centre.
 
@@ -604,38 +604,38 @@ the way to Ribbit's minimalism.
 
 Front-end only; the correction flow and the whole Rust side are untouched. The
 main window used to greet you with the model/key card and a hotkey hint up top
-and the history below — settings shouting before you'd done anything. **Now** it
+and the history below — settings shouting before you'd done anything. Now it
 opens like Ribbit's log: a clean chat-style list of past corrections (newest on
 top), and settings tuck behind a gear in the header.
 
-- **Settings behind the gear.** New `⚙` button in the titlebar toggles between
+- Settings behind the gear. New `⚙` button in the titlebar toggles between
   the log (`#log-view`) and a `#settings-panel` that holds Hotkey, Model, API
   key and the debug-log opener (Ribbit-style label-left / control-right rows).
   When there's no API key yet, startup auto-opens settings so onboarding still
   works. View switch is a plain show/hide (`showView`), debug stays an overlay.
-- **Status moved to a header subtitle.** The standalone status pill is gone;
+- Status moved to a header subtitle. The standalone status pill is gone;
   the live state ("Ready / working / done / error") is now a quiet line under
   the wordmark, colour-coded, settling back to "Ready". Keeps the body clean.
-- **Log rows redesigned (`logRow`).** Each finished correction is a flat row —
-  time, the polished text, and on the right a **clock** you *press and hold* to
+- Log rows redesigned (`logRow`). Each finished correction is a flat row —
+  time, the polished text, and on the right a clock you *press and hold* to
   reveal the original (dimmed + italic), releasing to snap back to the corrected
   text. Pointer-capture on press so the release restores even if the cursor
   drifts off the button. Unchanged corrections show "already clean" instead of a
   clock (nothing to peek at). Replaces the old click-anywhere-to-toggle card.
-- **Empty state.** A centred "Nothing yet" + the hotkey hint, shown when the log
+- Empty state. A centred "Nothing yet" + the hotkey hint, shown when the log
   is empty — the clean welcome, no settings in sight.
 - Data is unchanged: `get_log_history` / the `correction` event / `logger.rs`
   per-day JSONL store all stay as-is; only the rendering changed.
 
 ## 0.1.10 — editor window: review before it lands (Grammarly-style redesign, phase 1)
 
-The big UX shift. **Was:** the hotkey silently replaced the selection with the
+The big UX shift. Was: the hotkey silently replaced the selection with the
 corrected text — no feedback, no chance to read what changed or tweak it before
-it landed. **Now:** the hotkey captures the selection and opens a dedicated Quill
+it landed. Now: the hotkey captures the selection and opens a dedicated Quill
 editor window over it; the window runs the correction itself, shows the result
-for you to read and hand-edit, and on **Apply** it re-activates the app you were
-in and types the final text back over the (still-present) selection. **Cancel /
-Esc** types nothing — the original is left untouched.
+for you to read and hand-edit, and on Apply it re-activates the app you were
+in and types the final text back over the (still-present) selection. Cancel /
+Esc types nothing — the original is left untouched.
 
 Mechanics worth knowing for the next change:
 - New `editor` webview window (label `editor`, hidden until the hotkey fires;
@@ -695,24 +695,24 @@ the menu-bar glyph rendering couldn't be eyeballed from the build environment.)
 
 ## 0.1.7 — fix crash when triggering a correction (macOS)
 
-**What:** pressing the hotkey instantly crashed Quill on macOS (SIGTRAP).
+What: pressing the hotkey instantly crashed Quill on macOS (SIGTRAP).
 
-**Was:** selection capture synthesized ⌘C with `enigo.key(Key::Unicode('c'))`.
+Was: selection capture synthesized ⌘C with `enigo.key(Key::Unicode('c'))`.
 On macOS that makes enigo resolve the keycode through the Text Input Source APIs
-(TSM / HIToolbox), which `dispatch_assert_queue` the **main thread** and abort the
+(TSM / HIToolbox), which `dispatch_assert_queue` the main thread and abort the
 process when called from our worker thread — and the whole correction flow runs
 on a worker thread. The ⌘ modifier was fine (fixed keycode); only the
 layout-dependent `'c'` lookup tripped the assert. (`enigo.text()`, used to type
 the result, takes the CGEvent Unicode path and is safe off-main — which is why
 Ribbit, which only ever types, never hit this.)
 
-**Now:** on macOS we send the raw keycode of the physical C key
+Now: on macOS we send the raw keycode of the physical C key
 (`Key::Other(0x08)` = kVK_ANSI_C), which skips the TSM lookup — no main-thread
 requirement, no crash. Bonus: ⌘C now fires regardless of the active keyboard
 layout (e.g. a Cyrillic layout), which suits a bilingual tool. Windows keeps
 `Key::Unicode('c')` (no TSM there).
 
-**Tests:** a guard test pins the macOS copy key as a raw keycode (never
+Tests: a guard test pins the macOS copy key as a raw keycode (never
 `Key::Unicode`), so this crash class can't quietly return.
 
 ## 0.1.6 — platform-correct hotkey labels
@@ -727,7 +727,7 @@ tested both ways. README "How it works" now shows both forms.
 
 ## 0.1.3 — one-click platform downloads
 
-The README download buttons now link **straight to the installer** for each
+The README download buttons now link straight to the installer for each
 platform instead of dumping you on the Releases page full of every file.
 
 The snag: tauri names assets with the version baked in (`Quill_<ver>_aarch64.dmg`),
@@ -753,17 +753,17 @@ First version. Quill is the text-correction twin of Ribbit (voice-to-text):
 same Tauri v2 shell, same hotkey/tray/updater/keychain plumbing, the audio
 pipeline swapped for a selection→correct→insert flow.
 
-**What it does.** Global hotkey (default `ctrl+alt+e`) → grab the current
+What it does. Global hotkey (default `ctrl+alt+e`) → grab the current
 selection → send it to an LLM that fixes spelling/punctuation/grammar in RU or
 EN without changing meaning or tone → type the corrected text back over the
 selection.
 
-**Kept from Ribbit (unchanged plumbing):** `inserter.rs` (type via `enigo`, no
+Kept from Ribbit (unchanged plumbing): `inserter.rs` (type via `enigo`, no
 clipboard paste), `mac_window.rs`, `tcc_reset.rs` (cdhash-rotation permission
 re-arm), the tray, the auto-updater, the debug log, and the LLM HTTP client
 shape (providers table, retry-once, response parsing) now in `corrector.rs`.
 
-**New / changed:**
+New / changed:
 - `selection.rs` — the one genuinely new piece. Captures the selection by
   seeding the clipboard with a sentinel, synthesizing the platform Copy chord
   (⌘C / Ctrl+C), polling until the clipboard changes (≈1s ceiling), then
@@ -778,7 +778,7 @@ shape (providers table, retry-once, response parsing) now in `corrector.rs`.
   windows-native) instead of a plaintext `.env`. Loaded into the process env at
   startup so the corrector reads it the usual way.
 - `lib.rs` — rewritten. New `AppState { busy, current_shortcut }`. The hotkey
-  fires the flow on **Release** (so the chord's modifiers are up before we
+  fires the flow on Release (so the chord's modifiers are up before we
   synthesize ⌘C) with a 60ms settle delay, guarded by `busy` against re-fire.
   Identical-output short-circuit (don't re-type when nothing changed). Config
   dir renamed `ribbit`→`quill`. Dropped audio/transcribe/sound/vocab/usage and
@@ -788,15 +788,15 @@ shape (providers table, retry-once, response parsing) now in `corrector.rs`.
   the original), update + debug controls. New visual language — dark slate base
   shared with the Ribbit family, system-sans, ink-violet accent.
 
-**Prompt-injection guard.** The selection is arbitrary user content shipped to
+Prompt-injection guard. The selection is arbitrary user content shipped to
 an LLM, so the system prompt explicitly tells the model the text is content to
 correct, never instructions to obey. Pinned by a unit test.
 
-**Tests.** 15 Rust unit tests (provider table, prompt guarantees + injection
+Tests. 15 Rust unit tests (provider table, prompt guarantees + injection
 guard, payload shape + max_tokens scaling, response parsing/quote-stripping,
 empty/no-key guards) + 4 JS tests for the hotkey-string builder. All green.
 
-**Known follow-ups (not in this version):**
+Known follow-ups (not in this version):
 - App/tray icon is still Ribbit's frog placeholder — needs a Quill icon set.
 - Updater pubkey in `tauri.conf.json` is a placeholder — a real minisign
   keypair must be generated and its private half added as the CI signing secret
