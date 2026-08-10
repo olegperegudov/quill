@@ -718,6 +718,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // The window is a desk you size once. Position is saved too, but only
+        // decides where it opens on launch — the hotkey still puts it at the
+        // cursor, where the text being corrected is.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .on_window_event(|window, event| {
             // Closing hides. Quill has one window and it *is* the app: destroy it
             // (the cross, ⌘W — macOS installs its own Close item when the app sets

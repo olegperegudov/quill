@@ -1,23 +1,33 @@
 /* Quill — the one window. The titlebar stays put; below it the body swaps
    between the chat (hotkey surface), settings, and the debug log — the gear
    flips chat ↔ settings (.view-panel, below). Ribbit-style view switch.
-   Visual language (greenfield, set here): dark slate base shared with the
-   Ribbit family, a softer system-sans for a "writing" feel, and a sapphire-ink
-   accent that's distinctly Quill, not Ribbit's green. */
+
+   Visual world (2026-08-10, replaces the tray-chat look): the dictation desk.
+   A machine typed the transcript, Quill went over it with a red ribbon, and the
+   finished text lies below on the one sheet of real paper in the window — which
+   is also the only thing a click copies. No bubbles, no avatars, no blue: the
+   window is a document under correction, not a conversation. */
 
 :root {
-  --bg: #0f1318;
-  --panel: #161b22;
-  --panel-2: #1b212b;
-  --line: #232a35;
-  --text: #d8dee9;
-  --muted: #7a8493;
-  --ink: #5b9df7;        /* Quill accent — sapphire ink */
-  --ink-dim: #3f6fd1;
-  --good: #4ade80;
-  --bad: #f87171;
-  --stop: #e5484d;       /* generation in flight → the send button turns "stop" */
-  --stop-hi: #ef5f63;
+  /* The desk */
+  --ground: #17150f;       /* warm graphite, the desk surface */
+  --ground-deep: #131109;  /* titlebar and composer, one step down */
+  --rule: #2e2a20;         /* hairlines between sheets */
+  --rule-soft: #241f16;
+  /* The machine */
+  --machine: #b7ae99;      /* what the transcriber typed */
+  --slug: #9a8f78;         /* the small labels above each block */
+  --slug-dim: #8d8371;
+  /* The ribbon */
+  --ribbon: #d2554a;       /* struck out: what Quill dropped */
+  --ribbon-hi: #e5564c;    /* typed in: what Quill added */
+  /* The paper */
+  --paper: #efe9dc;
+  --paper-edge: #cfc7b4;
+  --paper-ink: #16130d;
+  --paper-slug: #6f6552;
+  --stamp: #2f6b46;        /* office stamp green — "copied", on paper */
+  --stamp-wash: #dfe8d9;
   --radius: 10px;
 }
 
@@ -37,7 +47,7 @@ html, body {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  color: var(--text);
+  color: var(--machine);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -48,7 +58,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--bg);
+  background: var(--ground);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -59,18 +69,24 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  padding: 0.5rem 0.6rem 0.45rem 0.7rem;
+  gap: 0.5rem;
+  padding: 0.55rem 0.55rem 0.5rem 0.7rem;
+  background: var(--ground-deep);
+  border-bottom: 1px solid var(--rule);
 }
-.brand { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
 /* The pixel feather, same file the README and the tray icon are cut from —
    pixel art, so no smoothing on the way down to 18px. */
 .mark { width: 18px; height: 18px; flex-shrink: 0; image-rendering: pixelated; }
-.brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.brand-text { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
+/* Silkscreened on the machine's case, not set as a logotype. */
 .wordmark {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-weight: 600;
-  font-size: 0.9rem;
-  letter-spacing: 0.02em;
-  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #cdc4ad;
 }
 .win-controls { display: flex; gap: 0.15rem; flex-shrink: 0; }
 .win-btn {
@@ -78,17 +94,17 @@ body {
   display: grid; place-items: center;
   background: transparent;
   border: none;
-  color: var(--muted);
+  color: var(--slug);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.85rem;
   transition: background 0.12s, color 0.12s;
 }
-.win-btn:hover { background: var(--panel-2); color: var(--text); }
-.win-btn.active { background: var(--panel-2); color: var(--ink); }
-.win-close:hover { background: #5b2330; color: #ffb4b4; }
+.win-btn:hover { background: #221e15; color: var(--machine); }
+.win-btn.active { background: #221e15; color: var(--ribbon-hi); }
+.win-close:hover { background: #3a1a16; color: #ffb4ac; }
 
-/* Conversation -------------------------------------------------------- */
+/* The log — a stack of sheets ------------------------------------------ */
 .log {
   flex: 1;
   min-height: 0;
@@ -96,217 +112,236 @@ body {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.4rem 0.7rem 0.7rem;
 }
 
-.msg { display: flex; flex-direction: column; max-width: 84%; }
-.msg-user { align-self: flex-end; align-items: flex-end; }
-/* A reply is signed with the feather, so the answer is Quill's and the bubble on
-   the right is yours — the same mark as the titlebar and the menu-bar icon. */
-.msg-bot { align-self: flex-start; flex-direction: row; align-items: flex-start; gap: 0.35rem; }
-.msg-bot .avatar {
-  width: 16px; height: 16px;
-  flex-shrink: 0;
-  margin-top: 0.3rem;
-  image-rendering: pixelated;
-  opacity: 0.85;
-}
-.msg-bot .stack { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
-.msg-system { align-self: stretch; align-items: center; max-width: 100%; }
+/* Sheets stack up from the composer, not down from the titlebar: with one
+   correction on the desk the dead space belongs above it, not below. Safe with
+   overflow (unlike justify-content: flex-end, which clips the top when the
+   stack outgrows the window). */
+.log > :first-child { margin-top: auto; }
 
-.bubble {
-  position: relative;
-  padding: 0.5rem 0.7rem;
-  border-radius: 13px;
-  line-height: 1.5;
-  font-size: 13px;
+/* One correction: the marked-up transcript, then the clean sheet under it. */
+.entry { border-bottom: 1px solid var(--rule); padding: 0.65rem 0.8rem 0.8rem; }
+.entry:last-child { border-bottom: none; }
+
+/* The small label above each block: what this is, and how many edits. */
+.slug {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--slug);
+  margin-bottom: 0.4rem;
+}
+.slug .edits { color: var(--ribbon); flex-shrink: 0; }
+.slug .edits:empty { display: none; }
+
+/* What the machine typed, with Quill's marks in the ribbon's own red. */
+.draft {
+  font-family: "Courier New", ui-monospace, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.72;
+  color: var(--machine);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
-  cursor: pointer;
-  /* The copy flash rides these: it lands instantly (`.copied` kills the
-     transition) and fades back out over a fifth of a second. */
-  transition: filter 0.12s, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
-/* Your text — accent tint, tail on the right. */
-.msg-user .bubble {
-  background: var(--ink-dim);
-  color: #eef4fe;
-  border-bottom-right-radius: 4px;
-}
-/* The correction — panel, tail on the left. */
-.msg-bot .bubble {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-bottom-left-radius: 4px;
-}
-.bubble:hover { filter: brightness(1.08); }
-.msg-bot .bubble:hover { box-shadow: 0 0 0 1px var(--ink-dim); }
-
-/* The edits, inside the reply. Added words carry a green wash the eye lands on
-   first (that is the text you keep); removed ones are struck through and stepped
-   back, so they read as a note about the old text rather than part of the new. */
-.msg-bot ins {
-  text-decoration: none;
-  /* An underline, not a filled chip: half the edits are a single comma, and a
-     chip per comma turns the sentence into a string of lights. */
-  background: rgba(74, 222, 128, 0.08);
-  box-shadow: inset 0 -1px 0 rgba(74, 222, 128, 0.55);
-  color: #e6f6ec;
-}
-.msg-bot del {
+.draft del {
+  color: var(--ribbon);
   text-decoration: line-through;
-  text-decoration-color: var(--bad);
   text-decoration-thickness: 1px;
-  color: var(--muted);
 }
-/* A replaced word ("of" → "have") shares one space with its neighbours, so the
+.draft ins { color: var(--ribbon-hi); text-decoration: none; }
+/* A replaced word ("сео" → "SEO") shares one space with its neighbours, so the
    two halves would touch. Part them without inventing a space in the text. */
-.msg-bot del + ins { margin-left: 3px; }
+.draft del + ins { margin-left: 3px; }
 
-/* Copied — the whole text flashes green, the way Ribbit's log lines do. A badge
-   in the corner asks to be looked for; the text you just took turning colour
-   under the cursor does not. It comes on at once and fades back out (the base
-   .bubble transition below carries the way back), so the eye catches the change
-   without a blink of chrome. */
-.bubble.copied {
+/* The finished text: the one sheet of paper in the window, and the only thing a
+   click copies. It is the brightest surface here because it is the deliverable. */
+.sheet {
+  margin-top: 0.7rem;
+  padding: 0.6rem 0.7rem 0.7rem;
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 var(--paper-edge), 0 10px 18px -14px rgba(0, 0, 0, 0.9);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13.5px;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  user-select: text;
+  -webkit-user-select: text;
+  /* The copy flash rides these: it lands at once (.copied kills the transition)
+     and fades back out over a fifth of a second. */
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.sheet .slug { color: var(--paper-slug); }
+.sheet:hover { box-shadow: 0 1px 0 var(--paper-edge), 0 0 0 1px var(--paper-edge), 0 10px 18px -14px rgba(0,0,0,.9); }
+
+/* Copied — the whole sheet answers, the way Ribbit's log lines do: it takes the
+   stamp's green at once and settles back. A badge in the corner asks to be
+   looked for; the text under the cursor changing colour does not. */
+.sheet.copied {
   transition: none;
-  background: rgba(74, 222, 128, 0.1);
-  color: var(--good);
-  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.45);
+  background: var(--stamp-wash);
+  color: var(--stamp);
+  box-shadow: 0 1px 0 #b9c9b2, 0 0 0 1px #9fb599, 0 10px 18px -14px rgba(0,0,0,.9);
 }
-/* The cursor is by definition on the bubble it just copied, so the flash has to
-   outrank the hover ring — same weight, stated later. */
-.msg-bot .bubble.copied { box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.45); }
-/* The edit marks join the flash instead of holding their own colours — for that
-   moment the bubble is one piece of text, not a diff. */
-.bubble.copied ins,
-.bubble.copied del {
-  color: var(--good);
-  background: transparent;
-  box-shadow: none;
-  text-decoration-color: currentColor;
-}
+.sheet.copied .slug { color: var(--stamp); }
 
-.bubble--clean { opacity: 0.72; }
-.clean-tag {
-  font-size: 0.66rem;
-  color: var(--muted);
-  margin-top: 0.18rem;
-  padding-left: 0.2rem;
-}
+/* Nothing to correct: no marks, no second block — one sheet, said plainly. */
+.entry--clean .sheet { margin-top: 0; }
 
-/* System note — quiet, centred, not copyable. */
-.msg-system .bubble {
-  background: transparent;
-  color: var(--muted);
-  border: 1px dashed var(--line);
-  cursor: default;
-  font-size: 0.78rem;
+/* Nothing on the desk yet — a blank sheet, ruled and waiting, with the two ways
+   in typed on it. Quiet on purpose: it is furniture, not an announcement. */
+.blank {
+  margin: auto 0;
+  padding: 1.4rem 0.9rem;
+  display: grid;
+  place-items: center;
+}
+.blank-sheet {
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px dashed var(--rule);
+  border-radius: 2px;
   text-align: center;
-  line-height: 1.5;
+  color: var(--slug);
+  font-family: "Courier New", ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.8;
 }
-.msg-system .bubble:hover { filter: none; }
+.blank-sheet p + p { margin-top: 0.35rem; color: var(--slug-dim); }
+.blank-sheet kbd { font-size: 0.72rem; cursor: default; }
 
-/* Thinking dots while a correction runs. */
-.bubble--pending { display: flex; gap: 4px; cursor: default; padding: 0.6rem 0.7rem; }
-.bubble--pending:hover { filter: none; }
-.bubble--pending span {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--muted);
-  animation: dot 1.1s ease-in-out infinite;
+/* A note from the app itself (no key yet, no Accessibility, a failed call).
+   Not a sheet: nothing here is yours to copy. */
+.note {
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--slug);
 }
-.bubble--pending span:nth-child(2) { animation-delay: 0.18s; }
-.bubble--pending span:nth-child(3) { animation-delay: 0.36s; }
-@keyframes dot {
-  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-2px); }
+.note--error { color: #e2a49c; }
+.note--error::before {
+  content: "";
+  display: inline-block;
+  width: 3px; height: 0.8em;
+  background: var(--ribbon);
+  margin-right: 0.45rem;
+  vertical-align: -0.04em;
 }
 
-/* Day separator — a thin rule each side of a small weekday/date label,
-   between calendar days. Copied from Ribbit, on Quill's tokens. */
+/* Working: the ribbon runs along under the transcript while the model reads it. */
+.ribbon-run {
+  height: 2px;
+  margin-top: 0.6rem;
+  background: linear-gradient(to right, transparent, var(--ribbon), transparent);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: ribbon 1.15s ease-in-out infinite;
+  border-radius: 1px;
+}
+@keyframes ribbon {
+  0% { background-position: -45% 0; }
+  100% { background-position: 145% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ribbon-run { animation: none; background-position: 0 0; background-size: 100% 100%; opacity: 0.5; }
+}
+
+/* Day separator — the date typed small into the margin between days. */
 .date-sep {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.55rem 0.2rem 0.15rem;
+  padding: 0.5rem 0.8rem 0.35rem;
+  border-bottom: 1px solid var(--rule-soft);
 }
-.date-sep::before,
-.date-sep::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-}
-.date-sep::before { background: linear-gradient(to right, transparent, var(--line)); }
-.date-sep::after { background: linear-gradient(to left, transparent, var(--line)); }
+.date-sep::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
 .date-sep-label {
-  font-size: 0.62rem;
-  color: var(--muted);
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.6rem;
+  color: var(--slug-dim);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.date-sep:first-child { padding-top: 0.2rem; }
 
 /* Composer ------------------------------------------------------------ */
 .composer {
+  position: relative;            /* anchor for the paper-feed hairline below */
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
-  gap: 0.45rem;
-  padding: 0.55rem 0.6rem 0.65rem;
-  border-top: 1px solid var(--line);
-  background: var(--bg);
+  gap: 0.5rem;
+  padding: 0.5rem 0.55rem 0.55rem 0.7rem;
+  border-top: 1px solid var(--rule);
+  background: var(--ground-deep);
 }
 #input {
   flex: 1;
   resize: none;
   max-height: 140px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--text);
-  padding: 0.5rem 0.65rem;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  background: transparent;
+  border: none;
+  color: var(--machine);
+  padding: 0.4rem 0 0.35rem;
+  font-family: "Courier New", ui-monospace, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
   outline: none;
   user-select: text;
   -webkit-user-select: text;
 }
-#input:focus { border-color: var(--ink-dim); }
-#input::placeholder { color: #4d5663; }
+#input::placeholder { color: var(--slug-dim); }
+/* The paper feed: a hairline that lights up under the text you are typing. */
+.composer::before {
+  content: "";
+  position: absolute;
+  left: 0.7rem; right: 3.1rem; bottom: 0.35rem;
+  height: 1px;
+  background: var(--rule);
+  transition: background 0.15s;
+}
+.composer:focus-within::before { background: var(--ribbon); }
+
 .send {
   flex-shrink: 0;
-  width: 34px; height: 34px;
+  width: 30px; height: 30px;
   display: grid; place-items: center;
-  background: var(--ink);
-  border: none;
-  border-radius: 9px;
-  color: #0c1a30;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--slug);
   cursor: pointer;
-  transition: background 0.12s;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
-.send:hover { filter: brightness(1.08); }
+.send:hover { border-color: var(--ribbon); color: var(--ribbon-hi); }
 /* Both glyphs share the single grid cell; only one shows at a time. */
 .send .i-stop { display: none; }
 .send .i-send { display: block; }
 
-/* While a correction is running the send button becomes a stop button — a red
-   rounded square that cancels the wait (the request is non-streaming, so this
-   drops the pending bubble and lets you edit + resend). */
-.composer.generating .send { background: var(--stop); color: #fff; }
-.composer.generating .send:hover { background: var(--stop-hi); filter: none; }
+/* While a correction is running the send button becomes a stop button — the
+   request is non-streaming, so this drops the pending block and lets you edit
+   and resend. */
+.composer.generating .send { background: var(--ribbon); border-color: var(--ribbon); color: #fff2f0; }
+.composer.generating .send:hover { background: var(--ribbon-hi); border-color: var(--ribbon-hi); }
 .composer.generating .send .i-send { display: none; }
 .composer.generating .send .i-stop {
   display: block;
-  width: 11px; height: 11px;
-  border-radius: 3px;
+  width: 10px; height: 10px;
+  border-radius: 2px;
   background: currentColor;
 }
 
@@ -321,21 +356,24 @@ body {
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.1rem 0.8rem 0.7rem;
+  padding: 0.2rem 0.8rem 0.7rem;
 }
 
-/* Transient status under the wordmark in the titlebar; hidden at rest. */
+/* Transient status beside the wordmark; hidden at rest. */
 .status-detail {
-  font-size: 0.7rem;
-  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--slug);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .status-detail:empty { display: none; }
-.status-detail.working { color: var(--ink); }
-.status-detail.done { color: var(--good); }
-.status-detail.error { color: #fca5a5; }
+.status-detail.working { color: var(--ribbon-hi); }
+.status-detail.done { color: var(--stamp); }
+.status-detail.error { color: #e2a49c; }
 
 /* Debug view header (its own back button; the gear returns to chat). */
 .panel-head {
@@ -343,9 +381,12 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  font-size: 0.82rem;
-  color: var(--muted);
-  padding: 0.2rem 0 0.45rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--slug);
+  padding: 0.3rem 0 0.5rem;
 }
 .debug-view { padding-bottom: 0.6rem; }
 
@@ -356,31 +397,37 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.6rem 0.1rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
 }
-.setting-label { font-size: 0.82rem; color: var(--muted); flex-shrink: 0; }
-#version { color: var(--muted); }
-/* Where updating went, said once and quietly. Muted, not accent — it is a note,
-   and an accent-coloured line here reads as a button that does nothing. */
-.setting-hint { font-size: 0.72rem; color: var(--muted); opacity: 0.75; }
+.setting-label {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slug);
+  flex-shrink: 0;
+}
+#version { color: var(--slug); }
+/* Where updating went, said once and quietly. */
+.setting-hint { font-size: 0.72rem; color: var(--slug-dim); }
 
 /* Provider stack ------------------------------------------------------ */
 /* The "Models" block: one card per provider, in priority order. It sits in the
    settings list, so it borrows the row rhythm rather than inventing its own. */
 .setting-row--head { border-bottom: none; padding-bottom: 0.3rem; }
-.setting-note { font-size: 0.72rem; color: var(--muted); opacity: 0.75; }
+.setting-note { font-size: 0.7rem; color: var(--slug-dim); }
 
 .provider-stack {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--rule);
 }
 .provider-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: #1c1912;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
   padding: 0.5rem 0.55rem;
   display: flex;
   flex-direction: column;
@@ -392,17 +439,16 @@ body {
   justify-content: space-between;
   gap: 0.4rem;
 }
-.provider-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; }
+.provider-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 600; color: #cdc4ad; }
 .provider-primary-tag {
-  font-size: 0.6rem;
-  font-weight: 500;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.56rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink);
-  background: rgba(91, 157, 247, 0.12);
-  border: 1px solid rgba(91, 157, 247, 0.25);
-  border-radius: 4px;
-  padding: 0.02rem 0.28rem;
+  letter-spacing: 0.12em;
+  color: var(--ribbon-hi);
+  border: 1px solid rgba(200, 52, 43, 0.4);
+  border-radius: 3px;
+  padding: 0.06rem 0.3rem;
 }
 .provider-ctrls { display: flex; gap: 0.1rem; }
 .provider-mini-btn {
@@ -410,21 +456,21 @@ body {
   display: grid; place-items: center;
   background: transparent;
   border: none;
-  border-radius: 5px;
-  color: var(--muted);
+  border-radius: 4px;
+  color: var(--slug);
   font-size: 0.72rem;
   font-family: inherit;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
-.provider-mini-btn:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.provider-mini-btn:hover:not(:disabled) { background: #241f16; color: var(--machine); }
 .provider-mini-btn:disabled { opacity: 0.25; cursor: default; }
-.provider-del:hover:not(:disabled) { background: #5b2330; color: #ffb4b4; }
+.provider-del:hover:not(:disabled) { background: #3a1a16; color: #ffb4ac; }
 
 .provider-field { display: flex; align-items: center; gap: 0.5rem; }
 .provider-field-label {
-  font-size: 0.68rem;
-  color: var(--muted);
+  font-size: 0.66rem;
+  color: var(--slug);
   width: 52px; /* fits the longest label ("endpoint") without clipping */
   flex-shrink: 0;
 }
@@ -438,28 +484,27 @@ body {
   padding: 0.28rem 0.4rem;
 }
 .provider-field .provider-input.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--muted); }
-.key-saved-check { color: var(--good); }
+.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--slug); }
+.key-saved-check { color: #5da37c; }
 
 /* An active fallback must never be silent — the user would blame Quill. */
 .fallback-status {
   font-size: 0.72rem;
-  color: #fbbf7a;
-  background: rgba(251, 191, 122, 0.08);
-  border: 1px solid rgba(251, 191, 122, 0.2);
-  border-radius: 6px;
+  color: #e0b07c;
+  border: 1px solid rgba(224, 176, 124, 0.28);
+  border-radius: 4px;
   padding: 0.3rem 0.45rem;
 }
 
 .provider-add select {
   width: 100%;
   min-width: 0;
-  color: var(--muted);
+  color: var(--slug);
   border-style: dashed;
 }
-.provider-add select:hover { border-color: var(--ink-dim); color: var(--text); }
+.provider-add select:hover { border-color: var(--ribbon); color: var(--machine); }
 
-.fallback-knobs .knobs { font-size: 0.75rem; color: var(--muted); text-align: right; }
+.fallback-knobs .knobs { font-size: 0.75rem; color: var(--slug); text-align: right; }
 .fallback-knobs input[type="number"] {
   width: 54px;
   text-align: center;
@@ -469,10 +514,10 @@ body {
 }
 
 select, input[type="password"], input[type="text"], input[type="number"] {
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
+  background: #1c1912;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--machine);
   padding: 0.35rem 0.5rem;
   font-size: 0.8rem;
   font-family: inherit;
@@ -480,8 +525,8 @@ select, input[type="password"], input[type="text"], input[type="number"] {
   max-width: 60%;
 }
 select { cursor: pointer; min-width: 9rem; }
-input:focus, select:focus { border-color: var(--ink-dim); }
-input::placeholder { color: #4d5663; }
+input:focus, select:focus { border-color: var(--ribbon); }
+input::placeholder { color: var(--slug-dim); }
 .key-field { display: flex; align-items: center; justify-content: flex-end; flex: 1; }
 .key-field input { flex: 1; max-width: none; }
 .saved {
@@ -489,64 +534,62 @@ input::placeholder { color: #4d5663; }
   align-items: center;
   gap: 0.35rem;
   font-size: 0.78rem;
-  color: var(--muted);
+  color: var(--slug);
 }
-.saved .check { color: var(--good); }
-.link { color: var(--ink); cursor: pointer; text-decoration: none; }
+.saved .check { color: #5da37c; }
+.link { color: var(--ribbon-hi); cursor: pointer; text-decoration: none; }
 .link:hover { text-decoration: underline; }
-.settings-note {
-  font-size: 0.72rem;
-  color: var(--muted);
-  opacity: 0.7;
-  padding: 0.6rem 0.1rem;
-}
+.settings-note { font-size: 0.72rem; color: var(--slug-dim); padding: 0.6rem 0.1rem; }
 
 kbd {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.76rem;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
+  background: #1c1912;
+  border: 1px solid var(--rule);
   border-bottom-width: 2px;
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 0.1rem 0.4rem;
-  color: var(--text);
+  color: var(--machine);
   cursor: pointer;
   white-space: nowrap;
 }
-kbd:hover { border-color: var(--ink-dim); color: var(--ink); }
-kbd.capturing { border-color: var(--ink); color: var(--ink); background: rgba(91,157,247,0.12); }
+kbd:hover { border-color: var(--ribbon); color: var(--ribbon-hi); }
+kbd.capturing { border-color: var(--ribbon); color: var(--ribbon-hi); }
 
-/* Ghost buttons (debug, update) — update glows green when armed. */
+/* Ghost buttons (debug). */
 .ghost {
   background: transparent;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  border-radius: 6px;
+  border: 1px solid var(--rule);
+  color: var(--slug);
+  border-radius: 4px;
   padding: 0.25rem 0.5rem;
   font-size: 0.72rem;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: border-color 0.12s, color 0.12s;
 }
-.ghost:hover { border-color: var(--ink-dim); color: var(--text); }
+.ghost:hover { border-color: var(--ribbon); color: var(--machine); }
 .ghost:disabled { opacity: 0.5; cursor: default; }
 
+.log::-webkit-scrollbar,
 .view-panel::-webkit-scrollbar { width: 6px; }
-.view-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-.view-panel::-webkit-scrollbar-thumb:hover { background: #2f3947; }
+.log::-webkit-scrollbar-thumb,
+.view-panel::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+.log::-webkit-scrollbar-thumb:hover,
+.view-panel::-webkit-scrollbar-thumb:hover { background: #3b3427; }
 
 /* Debug log content */
 #debug-content {
   flex: 1;
   overflow: auto;
   overscroll-behavior: contain;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  background: #1c1912;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
   padding: 0.5rem;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.68rem;
-  color: var(--muted);
+  color: var(--slug);
   white-space: pre-wrap;
   word-break: break-word;
   user-select: text;

@@ -31,6 +31,10 @@ arboard = "3"
 chrono = "0.4"
 dirs = "6"
 tauri-plugin-updater = "2"
+# Remembers the window's size and position between launches — Tauri's own plugin,
+# so the desk you sized once stays that size. The hotkey still places the window
+# at the cursor; only the size and the launch position come from here.
+tauri-plugin-window-state = "2"
 tokio = { version = "1", features = ["time"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

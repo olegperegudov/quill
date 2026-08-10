@@ -1,14 +1,15 @@
-//! Quill chat window — the hotkey pops this at the cursor.
+//! Quill's window — the hotkey pops this at the cursor.
 //!
 //! Flow: select text anywhere + press the hotkey → Rust captures the selection
-//! and emits `editor:capture`. We show it as your bubble, run the correction,
-//! and drop the result in as a reply bubble. Click any bubble to copy it to the
-//! clipboard (then paste it yourself). The composer at the bottom lets you type
-//! or paste a fresh message — Enter sends it through the same correct→reply path,
-//! so re-polishing is just: click your bubble (copies), paste, tweak, Enter.
+//! and emits `editor:capture`. The text lands as a transcript, the correction
+//! marks it up in place (struck out / typed in), and the finished text settles
+//! under it on a paper sheet. Clicking the sheet copies it — that, and only
+//! that, is what a click takes: the correction, never the marks. The composer
+//! at the bottom sends fresh text through the same path with Enter.
 
 import { initSettings } from "./settings.js";
 import { diffWords } from "./diff.js";
+import { prettyShortcut } from "./shortcut.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -62,108 +63,139 @@ function ensureDay(iso) {
   log.appendChild(sep);
 }
 
-// Copy a bubble's text and flash the whole of it green — Ribbit's signal, and
-// the one the eye is already on, since the cursor is over the text it just took.
-async function copyBubble(bubble, text) {
+// Copy the sheet's text and flash the whole of it — Ribbit's signal, and the one
+// the eye is already on, since the cursor is over the text it just took.
+async function copySheet(sheet, text) {
   try {
     await invoke("copy_to_clipboard", { text });
-    bubble.classList.add("copied");
-    setTimeout(() => bubble.classList.remove("copied"), 700);
+    sheet.classList.add("copied");
+    setTimeout(() => sheet.classList.remove("copied"), 700);
   } catch (err) {
     dlog(`copy failed: ${err}`);
   }
 }
 
-// A reply row: the feather, then the bubble (and whatever sits under it). The
-// feather is what tells the two sides of the conversation apart at a glance —
-// your text is a plain bubble on the right, Quill's answer is signed on the left.
-function botRow(...children) {
-  const msg = document.createElement("div");
-  msg.className = "msg msg-bot";
-  const mark = document.createElement("img");
-  mark.className = "avatar";
-  mark.src = "quill.png";
-  mark.width = 16;
-  mark.height = 16;
-  mark.alt = "";
-  const stack = document.createElement("div");
-  stack.className = "stack";
-  stack.append(...children);
-  msg.append(mark, stack);
-  return msg;
+// The label above a block: what it is on the left, the edit count on the right.
+function slug(label, count = "") {
+  const row = document.createElement("div");
+  row.className = "slug";
+  const left = document.createElement("span");
+  left.textContent = label;
+  const right = document.createElement("span");
+  right.className = "edits";
+  right.textContent = count;
+  row.append(left, right);
+  return row;
 }
 
-// Paint the correction as the edits themselves: what Quill dropped is struck
-// through, what it added is underlined. A text too long to diff (a pasted page)
-// falls back to plain — see MAX_TOKENS in diff.js.
-function renderCorrection(bubble, original, corrected) {
-  const ops = original === null ? null : diffWords(original, corrected);
+const edits = (n) => `${n} ${n === 1 ? "edit" : "edits"}`;
+
+// Paint the transcript with the edits themselves: what Quill dropped is struck
+// through, what it typed in is in the ribbon's red. Returns how many edits were
+// marked. A text too long to diff (a pasted page) falls back to plain and
+// reports none — see MAX_TOKENS in diff.js.
+function renderDraft(el, original, corrected) {
+  el.textContent = "";
+  const ops = diffWords(original, corrected);
   if (!ops) {
-    bubble.textContent = corrected;
-    return;
+    el.textContent = original;
+    return 0;
   }
+  let marks = 0;
   for (const op of ops) {
     if (op.type === "same") {
-      bubble.append(op.text);
+      el.append(op.text);
       continue;
     }
-    const el = document.createElement(op.type === "ins" ? "ins" : "del");
-    el.textContent = op.text;
-    bubble.appendChild(el);
+    // A replacement is one edit, not two: count the removal and let its
+    // insertion ride along.
+    if (op.type !== "ins" || !el.lastElementChild || el.lastElementChild.tagName !== "DEL") marks++;
+    const mark = document.createElement(op.type === "ins" ? "ins" : "del");
+    mark.textContent = op.text;
+    el.appendChild(mark);
   }
+  return marks;
 }
 
-// One chat row. role: "user" (your text), "bot" (the correction), "system"
-// (a note — not copyable). `original` is the text the correction came from, so a
-// reply can show what changed; `clean` marks a correction that changed nothing.
-function addMessage(role, text, { clean = false, original = null } = {}) {
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  if (role === "bot" && !clean) renderCorrection(bubble, original, text);
-  else bubble.textContent = text;
+// One correction on the desk: the transcript with its marks, and under it the
+// finished text on paper. Built empty (`corrected` null) while the model reads,
+// then finished in place by `settle` below — the transcript never jumps.
+function addEntry(original) {
+  clearEmptyDesk();
+  const entry = document.createElement("div");
+  entry.className = "entry";
+  const head = slug("transcript");
+  const draft = document.createElement("div");
+  draft.className = "draft";
+  draft.textContent = original;
+  const run = document.createElement("div");
+  run.className = "ribbon-run";
+  entry.append(head, draft, run);
+  log.appendChild(entry);
+  scrollToBottom();
+  return { entry, head, draft, run };
+}
 
-  const extras = [];
-  if (role !== "system") {
-    bubble.title = "click to copy";
-    // Copy the correction, never the markup — the struck-through words are the
-    // ones the user asked Quill to get rid of.
-    bubble.addEventListener("click", () => copyBubble(bubble, text));
-    if (clean) {
-      bubble.classList.add("bubble--clean");
-      const tag = document.createElement("span");
-      tag.className = "clean-tag";
-      tag.textContent = "already clean";
-      extras.push(tag);
-    }
-  }
-
-  let msg;
-  if (role === "bot") {
-    msg = botRow(bubble, ...extras);
+// The correction came back: mark the transcript, lay the clean sheet under it.
+function settle(parts, original, corrected) {
+  const { entry, head, draft, run } = parts;
+  run.remove();
+  const clean = corrected === original;
+  if (clean) {
+    entry.classList.add("entry--clean");
+    head.remove();
+    draft.remove();
   } else {
-    msg = document.createElement("div");
-    msg.className = `msg msg-${role}`;
-    msg.append(bubble, ...extras);
+    const marks = renderDraft(draft, original, corrected);
+    head.querySelector(".edits").textContent = marks ? edits(marks) : "";
   }
-  log.appendChild(msg);
+
+  const sheet = document.createElement("div");
+  sheet.className = "sheet";
+  sheet.append(slug(clean ? "already clean · click to copy" : "clean copy · click to copy"));
+  sheet.append(corrected);
+  // Copy the correction, never the markup — the struck-through words are the
+  // ones the user asked Quill to get rid of.
+  sheet.addEventListener("click", () => copySheet(sheet, corrected));
+  entry.appendChild(sheet);
   scrollToBottom();
-  return msg;
 }
 
-// A reply bubble with animated dots while the LLM is thinking.
-function addPending() {
-  const bubble = document.createElement("div");
-  bubble.className = "bubble bubble--pending";
-  bubble.innerHTML = `<span></span><span></span><span></span>`;
-  const msg = botRow(bubble);
-  log.appendChild(msg);
-  scrollToBottom();
-  return msg;
+// Nothing on the desk yet: a blank sheet with the two ways in typed on it.
+// Rendered once at boot and cleared by the first thing that lands in the log —
+// an empty window that says nothing reads as a broken one.
+async function showEmptyDesk() {
+  if (log.querySelector(".entry, .note")) return;
+  let keys = "⌃⌥E";
+  try {
+    const s = await invoke("get_shortcut");
+    if (s) keys = prettyShortcut(s, navigator.platform.toLowerCase().includes("mac"));
+  } catch (_) {}
+  const blank = document.createElement("div");
+  blank.className = "blank";
+  blank.innerHTML =
+    `<div class="blank-sheet"><p>Select text anywhere and press <kbd>${keys}</kbd>.</p>` +
+    `<p>Or paste it below — Enter corrects it.</p></div>`;
+  log.appendChild(blank);
 }
 
-// Corrections in flight: id → its pending bubble. While any are running, the
+const clearEmptyDesk = () => log.querySelector(".blank")?.remove();
+
+// A note from the app itself — no key yet, no Accessibility, a failed call.
+// Nothing here is copyable, so it is not a sheet.
+function addNote(text, { error = false } = {}) {
+  clearEmptyDesk();
+  const note = document.createElement("div");
+  note.className = error ? "note note--error" : "note";
+  note.textContent = text;
+  log.appendChild(note);
+  scrollToBottom();
+  return note;
+}
+
+// Corrections in flight: id → its unfinished entry. While any are running, the
 // send button turns into a stop button. The correction is a single
-// non-streaming request, so "stop" means: drop the pending bubble and ignore
+// non-streaming request, so "stop" means: drop the unfinished entry and ignore
 // whatever the call eventually returns, freeing the user to edit and resend.
 const inFlight = new Map();
 let correctionId = 0;
@@ -176,30 +208,28 @@ function reflectGenerating() {
 }
 
 function stopGenerating() {
-  for (const pending of inFlight.values()) pending.remove();
+  for (const parts of inFlight.values()) parts.entry.remove();
   inFlight.clear();
   reflectGenerating();
   input.focus();
 }
 
-// Send `text` through correct→reply. Each call owns its own pending bubble, so
+// Send `text` through correct→settle. Each call owns its own entry, so
 // concurrent corrections resolve into their own slots.
 async function runCorrection(text) {
   const id = ++correctionId;
   ensureDay();
-  addMessage("user", text);
-  const pending = addPending();
-  inFlight.set(id, pending);
+  const parts = addEntry(text);
+  inFlight.set(id, parts);
   reflectGenerating();
   try {
     const corrected = await invoke("editor_correct", { text });
     if (!inFlight.has(id)) return; // stopped while we were waiting → discard
-    pending.remove();
-    addMessage("bot", corrected, { clean: corrected === text, original: text });
+    settle(parts, text, corrected);
   } catch (err) {
     if (!inFlight.has(id)) return; // stopped while we were waiting → discard
-    pending.remove();
-    addMessage("system", `⚠ ${err}`);
+    parts.entry.remove();
+    addNote(String(err), { error: true });
   } finally {
     inFlight.delete(id);
     reflectGenerating();
@@ -210,13 +240,13 @@ async function loadHistory() {
   try {
     const entries = await invoke("get_log_history", { limit: 50 });
     if (!entries || entries.length === 0) return;
-    // History comes newest-first; a chat reads oldest-at-top.
+    // History comes newest-first; the desk reads oldest-at-top.
+    clearEmptyDesk();
     for (const e of entries.slice().reverse()) {
       const orig = e.original || "";
       const corr = e.corrected || "";
       ensureDay(e.ts);
-      addMessage("user", orig);
-      addMessage("bot", corr, { clean: orig === corr, original: orig });
+      settle(addEntry(orig), orig, corr);
     }
     scrollToBottom();
   } catch (err) {
@@ -305,8 +335,7 @@ listen("editor:capture", (e) => {
 // one quiet inline note instead of a blocking overlay.
 listen("editor:need-access", () => {
   ensureDay();
-  addMessage(
-    "system",
+  addNote(
     "I need Accessibility access to read the selected text. " +
       "macOS already asked — enable Quill and press ⌃⌥E again (settings are behind ⚙)."
   );
@@ -319,7 +348,8 @@ listen("editor:need-access", () => {
 // settings view so the window the tray/hotkey reveals isn't a dead end — Rust
 // shows this window on a keyless launch.
 async function boot() {
-  loadHistory();
+  await loadHistory();
+  showEmptyDesk();
   try {
     const cfg = await initSettings();
     if (cfg && !cfg.has_api_key) setView("settings");
