@@ -645,26 +645,108 @@ fn save_config(config: &serde_json::Value) -> Result<(), String> {
     private::write(&path, serde_json::to_string_pretty(config).unwrap().as_bytes()).map_err(|e| e.to_string())
 }
 
-/// Show/hide the chat from the tray — the chat *is* the app's face, so a left
-/// click on the icon toggles it, the way the frog and the parrot do. Mirrors
-/// Ribbit: we avoid minimize/unminimize on macOS (it forces a Space switch);
-/// hide()/show() lands on the user's current Space. No cursor repositioning
-/// here — that's only for the hotkey, which opens the chat where you're working.
-fn toggle_chat_window<R: tauri::Runtime>(app: &AppHandle<R>) {
+/// A rectangle in physical pixels — a tray icon's, or a screen's.
+#[derive(Clone, Copy, Debug)]
+struct PixelRect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+/// Breathing room between the tray icon and the window, in logical pixels.
+const TRAY_GAP: f64 = 6.0;
+
+/// Where a `win_w × win_h` window goes so it hangs off the tray `icon` like that
+/// icon's own menu: centred under it, or above it when the icon sits at the
+/// bottom of the screen (a Windows taskbar), and never past the screen edge —
+/// an icon in the corner would otherwise push half the window off it.
+///
+/// `screen` is the display the icon is on; None (no monitor reported) simply
+/// skips the fitting. Pure geometry, so the placement is tested without a screen.
+fn popover_position(icon: PixelRect, win_w: f64, win_h: f64, screen: Option<PixelRect>, gap: f64) -> (f64, f64) {
+    let mut x = icon.x + icon.w / 2.0 - win_w / 2.0;
+    let mut y = icon.y + icon.h + gap;
+    if let Some(s) = screen {
+        if y + win_h > s.y + s.h {
+            y = (icon.y - gap - win_h).max(s.y + gap);
+        }
+        let leftmost = s.x + gap;
+        let rightmost = (s.x + s.w - win_w - gap).max(leftmost);
+        x = x.clamp(leftmost, rightmost);
+    }
+    (x, y)
+}
+
+/// Park the window under the tray icon that was just clicked.
+fn anchor_to_tray<R: tauri::Runtime>(w: &tauri::WebviewWindow<R>, rect: tauri::Rect) {
+    let scale = w.scale_factor().unwrap_or(1.0);
+    let pos = rect.position.to_physical::<f64>(scale);
+    let size = rect.size.to_physical::<f64>(scale);
+    let icon = PixelRect { x: pos.x, y: pos.y, w: size.width, h: size.height };
+    let Ok(win) = w.outer_size() else { return };
+    let screen = w
+        .monitor_from_point(icon.x, icon.y)
+        .ok()
+        .flatten()
+        .or_else(|| w.current_monitor().ok().flatten())
+        .map(|m| PixelRect {
+            x: m.position().x as f64,
+            y: m.position().y as f64,
+            w: m.size().width as f64,
+            h: m.size().height as f64,
+        });
+    let (x, y) = popover_position(icon, win.width as f64, win.height as f64, screen, TRAY_GAP * scale);
+    let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
+/// When the window last hid itself because focus went elsewhere.
+///
+/// Clicking the tray icon is one such "elsewhere": the window loses focus and
+/// auto-hides *before* the click handler runs, so the handler would see a hidden
+/// window and show it right back — the icon could never close it.
+static LAST_AUTO_HIDE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// Called from the focus-lost handler right before it hides the window.
+fn note_auto_hide() {
+    if let Ok(mut t) = LAST_AUTO_HIDE.lock() {
+        *t = Some(std::time::Instant::now());
+    }
+}
+
+/// True when the window auto-hid a moment ago — i.e. the click being handled is
+/// what dismissed it.
+fn just_auto_hid() -> bool {
+    LAST_AUTO_HIDE
+        .lock()
+        .ok()
+        .and_then(|t| *t)
+        .map(|t| t.elapsed() < std::time::Duration::from_millis(400))
+        .unwrap_or(false)
+}
+
+/// Left click on the tray icon: the chat drops out from under the icon, or goes
+/// away again if it was up — the frog's behaviour, and the reason the tray click
+/// carries the icon's own rectangle. Mirrors Ribbit: no minimize/unminimize on
+/// macOS (it forces a Space switch); hide()/show() lands on the current Space.
+/// The hotkey path does not come through here — it opens the chat at the cursor,
+/// where the text being corrected is.
+fn toggle_chat_window<R: tauri::Runtime>(app: &AppHandle<R>, rect: Option<tauri::Rect>) {
     let Some(w) = app.get_webview_window("editor") else {
         // A window that isn't there reads as a dead icon. Say so in the log.
         debug_log::log("tray: the chat window is gone, cannot show it");
         return;
     };
-    let visible = w.is_visible().unwrap_or(false);
-    let focused = w.is_focused().unwrap_or(false);
-    if visible && focused {
+    if w.is_visible().unwrap_or(false) || just_auto_hid() {
         let _ = w.hide();
-    } else {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
+        return;
     }
+    if let Some(rect) = rect {
+        anchor_to_tray(&w, rect);
+    }
+    let _ = w.unminimize();
+    let _ = w.show();
+    let _ = w.set_focus();
 }
 
 fn register_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> {
@@ -731,6 +813,18 @@ pub fn run() {
             if HIDE_ON_CLOSE.contains(&window.label()) {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+            // The chat hangs off the tray icon like that icon's own menu, and a
+            // menu closes when you look away: a click anywhere else takes focus
+            // and the window goes back to the tray, one click from returning.
+            // (Esc does the same from the keyboard — editor.js calls
+            // close_editor.) `note_auto_hide` marks the moment so the tray click
+            // that caused it isn't read as "show me the window".
+            if window.label() == "editor" {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    note_auto_hide();
                     let _ = window.hide();
                 }
             }
@@ -801,10 +895,11 @@ pub fn run() {
                         // takes focus off an open window, and acting on both
                         // toggles twice.
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
-                        toggle_chat_window(tray.app_handle());
+                        toggle_chat_window(tray.app_handle(), Some(rect));
                     }
                 })
                 .on_menu_event(move |app, event| match event.id().as_ref() {
@@ -1016,6 +1111,28 @@ mod tray_tests {
         );
     }
 
+    /// The chat is a popover: it drops out from under the icon and goes away
+    /// when you look elsewhere. Lose the anchor and it opens in the middle of
+    /// the screen; lose the focus-lost hide and it stays over everything; lose
+    /// the guard and the icon can never close it (the click that dismissed the
+    /// window would be read as a request to show it).
+    #[test]
+    fn the_chat_hangs_off_the_icon_and_closes_when_focus_leaves() {
+        let code = app_code();
+        assert!(
+            code.contains("anchor_to_tray(&w, rect)"),
+            "the tray click no longer parks the window under the icon"
+        );
+        assert!(
+            code.contains("tauri::WindowEvent::Focused(false)"),
+            "nothing hides the window when focus leaves it"
+        );
+        assert!(
+            code.contains("|| just_auto_hid()"),
+            "the tray click ignores the auto-hide it just caused — the icon cannot close the window"
+        );
+    }
+
     /// Update, version, quit — the same three the frog and the parrot carry, and
     /// the only place updating lives (the window has no button for it).
     #[test]
@@ -1024,6 +1141,64 @@ mod tray_tests {
         for id in ["\"update\"", "\"version\"", "\"quit\""] {
             assert!(code.contains(&format!("with_id({}", id)), "tray menu lost {}", id);
         }
+    }
+}
+
+/// The window hangs off the tray icon, so where it lands is geometry worth
+/// pinning: an icon near a screen edge, on a second monitor, or on a taskbar at
+/// the bottom each used to push the window half off the screen.
+#[cfg(test)]
+mod popover_tests {
+    use super::{popover_position, PixelRect};
+
+    /// A 1440p screen with a 24px-tall menu bar icon at x=1200, the ordinary case.
+    const SCREEN: PixelRect = PixelRect { x: 0.0, y: 0.0, w: 2560.0, h: 1440.0 };
+    const WIN: (f64, f64) = (520.0, 700.0);
+    const GAP: f64 = 6.0;
+
+    #[test]
+    fn the_window_hangs_centred_under_the_icon() {
+        let icon = PixelRect { x: 1200.0, y: 0.0, w: 24.0, h: 24.0 };
+        let (x, y) = popover_position(icon, WIN.0, WIN.1, Some(SCREEN), GAP);
+        assert_eq!(x, 1212.0 - WIN.0 / 2.0, "icon centre, minus half the window");
+        assert_eq!(y, 30.0, "just below the icon");
+    }
+
+    #[test]
+    fn an_icon_at_the_bottom_of_the_screen_gets_the_window_above_it() {
+        // A Windows taskbar: hanging "below" would put the window off-screen.
+        let icon = PixelRect { x: 1200.0, y: 1400.0, w: 24.0, h: 24.0 };
+        let (_, y) = popover_position(icon, WIN.0, WIN.1, Some(SCREEN), GAP);
+        assert_eq!(y, 1400.0 - GAP - WIN.1);
+    }
+
+    #[test]
+    fn a_corner_icon_does_not_push_the_window_off_the_screen() {
+        let right = PixelRect { x: 2548.0, y: 0.0, w: 12.0, h: 24.0 };
+        let (x, _) = popover_position(right, WIN.0, WIN.1, Some(SCREEN), GAP);
+        assert_eq!(x, SCREEN.w - WIN.0 - GAP);
+
+        let left = PixelRect { x: 0.0, y: 0.0, w: 12.0, h: 24.0 };
+        let (x, _) = popover_position(left, WIN.0, WIN.1, Some(SCREEN), GAP);
+        assert_eq!(x, GAP);
+    }
+
+    #[test]
+    fn a_second_monitor_is_measured_from_its_own_origin() {
+        // Monitors to the right of the primary start at a non-zero x, and one
+        // above it at a negative y — placement must not assume a 0,0 origin.
+        let screen = PixelRect { x: 2560.0, y: -1440.0, w: 1920.0, h: 1080.0 };
+        let icon = PixelRect { x: 4470.0, y: -1440.0, w: 12.0, h: 24.0 };
+        let (x, y) = popover_position(icon, WIN.0, WIN.1, Some(screen), GAP);
+        assert_eq!(x, screen.x + screen.w - WIN.0 - GAP);
+        assert_eq!(y, -1440.0 + 24.0 + GAP);
+    }
+
+    #[test]
+    fn without_a_monitor_the_window_still_lands_under_the_icon() {
+        let icon = PixelRect { x: 1200.0, y: 0.0, w: 24.0, h: 24.0 };
+        let (x, y) = popover_position(icon, WIN.0, WIN.1, None, GAP);
+        assert_eq!((x, y), (1212.0 - WIN.0 / 2.0, 30.0));
     }
 }
 

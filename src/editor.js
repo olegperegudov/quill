@@ -344,8 +344,13 @@ window.addEventListener("keydown", (e) => {
 
 // Hotkey captured a selection (may be empty if nothing was selected / capture
 // failed): show it and correct it, or just focus the composer to type.
+//
+// The desk comes forward first. The window keeps whatever view it was left on,
+// and a hotkey answered by the settings panel looks like the hotkey did nothing
+// — the correction was running behind it all along.
 listen("editor:capture", (e) => {
   const text = (e.payload || "").trim();
+  setView("chat");
   if (text) runCorrection(text);
   else { input.focus(); scrollToBottom(); }
 });
