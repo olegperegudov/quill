@@ -425,10 +425,10 @@ fn launch_editor(state: &Arc<Mutex<AppState>>, app: &AppHandle) {
                 debug_log::log("editor window missing — cannot open");
                 return false;
             };
+            let handle = app.clone();
             let _ = app.run_on_main_thread(move || {
                 let _ = mac_window::position_at_cursor(&w);
-                let _ = w.show();
-                let _ = w.set_focus();
+                show_chat(&handle);
             });
             true
         };
@@ -519,12 +519,10 @@ fn copy_to_clipboard(text: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Cancel: hide the chat window.
+/// Cancel: hide the chat window (Esc, the cross in the titlebar).
 #[tauri::command]
 fn close_editor(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("editor") {
-        let _ = w.hide();
-    }
+    hide_chat(&app);
 }
 
 /// Is the app trusted for Accessibility right now? Backs the editor's "I've
@@ -725,28 +723,66 @@ fn just_auto_hid() -> bool {
         .unwrap_or(false)
 }
 
+/// Bring the chat forward. On macOS the window is a non-activating NSPanel
+/// (mac_window::setup_panel): it surfaces on the Space the user is on right now,
+/// over a full-screen app included, and takes the keyboard without activating
+/// Quill — activating is what used to teleport the user to another desktop.
+/// Everywhere else an ordinary show/focus is the whole story.
+fn show_chat(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    mac_window::show_panel(app);
+    #[cfg(not(target_os = "macos"))]
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+/// Put the chat back in the tray.
+fn hide_chat(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    mac_window::hide_panel(app);
+    #[cfg(not(target_os = "macos"))]
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.hide();
+    }
+}
+
+/// Whether the chat is on screen.
+fn chat_visible(app: &AppHandle) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        mac_window::panel_visible(app)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        app.get_webview_window("editor").and_then(|w| w.is_visible().ok()).unwrap_or(false)
+    }
+}
+
 /// Left click on the tray icon: the chat drops out from under the icon, or goes
 /// away again if it was up — the frog's behaviour, and the reason the tray click
-/// carries the icon's own rectangle. Mirrors Ribbit: no minimize/unminimize on
-/// macOS (it forces a Space switch); hide()/show() lands on the current Space.
-/// The hotkey path does not come through here — it opens the chat at the cursor,
-/// where the text being corrected is.
-fn toggle_chat_window<R: tauri::Runtime>(app: &AppHandle<R>, rect: Option<tauri::Rect>) {
+/// carries the icon's own rectangle. The hotkey path does not come through here
+/// — it opens the chat at the cursor, where the text being corrected is.
+fn toggle_chat_window(app: &AppHandle, rect: Option<tauri::Rect>) {
     let Some(w) = app.get_webview_window("editor") else {
         // A window that isn't there reads as a dead icon. Say so in the log.
         debug_log::log("tray: the chat window is gone, cannot show it");
         return;
     };
-    if w.is_visible().unwrap_or(false) || just_auto_hid() {
-        let _ = w.hide();
+    // The panel hides itself the moment focus leaves it, and this very click is
+    // what took the focus away — so an open chat already reads as hidden by the
+    // time we run. `just_auto_hid` is the "the click you are handling is the one
+    // that closed it" signal; without it the icon could never close the window.
+    if chat_visible(app) || just_auto_hid() {
+        hide_chat(app);
         return;
     }
     if let Some(rect) = rect {
         anchor_to_tray(&w, rect);
     }
-    let _ = w.unminimize();
-    let _ = w.show();
-    let _ = w.set_focus();
+    show_chat(app);
 }
 
 fn register_shortcut(app: &AppHandle, shortcut: Shortcut) -> Result<(), String> {
@@ -796,14 +832,20 @@ pub fn run() {
         current_shortcut: saved_shortcut,
     }));
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         // The window is a desk you size once. Position is saved too, but only
-        // decides where it opens on launch — the hotkey still puts it at the
-        // cursor, where the text being corrected is.
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // decides where it opens on launch — the tray click parks it under the
+        // icon and the hotkey puts it at the cursor, where the text is.
+        .plugin(tauri_plugin_window_state::Builder::default().build());
+    // macOS-only: turns the chat into the non-activating NSPanel (see mac_window).
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_nspanel::init());
+    }
+    builder
         .on_window_event(|window, event| {
             // Closing hides. Quill has one window and it *is* the app: destroy it
             // (the cross, ⌘W — macOS installs its own Close item when the app sets
@@ -813,7 +855,7 @@ pub fn run() {
             if HIDE_ON_CLOSE.contains(&window.label()) {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
-                    let _ = window.hide();
+                    hide_chat(window.app_handle());
                 }
             }
             // The chat hangs off the tray icon like that icon's own menu, and a
@@ -822,6 +864,12 @@ pub fn run() {
             // (Esc does the same from the keyboard — editor.js calls
             // close_editor.) `note_auto_hide` marks the moment so the tray click
             // that caused it isn't read as "show me the window".
+            //
+            // macOS has its own path: the panel's `window_did_resign_key`
+            // delegate (mac_window::setup_panel). A non-activating panel does not
+            // report focus through Tauri's window events, so this handler is the
+            // Windows half of the same behaviour.
+            #[cfg(not(target_os = "macos"))]
             if window.label() == "editor" {
                 if let tauri::WindowEvent::Focused(false) = event {
                     note_auto_hide();
@@ -918,14 +966,14 @@ pub fn run() {
             }
             let _tray = tray_builder.build(app)?;
 
-            // macOS-only window polish: rounded corners + follow active Space.
-            // One window now — the chat (borderless + transparent).
+            // macOS-only window work: become the panel first (it replaces the
+            // window's whole Space behaviour), then round its corners.
             if let Some(win) = app.get_webview_window("editor") {
+                if let Err(e) = mac_window::setup_panel(&win) {
+                    debug_log::log(&format!("panel setup: {}", e));
+                }
                 if let Err(e) = mac_window::apply_rounded_corners(&win, 10.0) {
                     debug_log::log(&format!("rounded corners: {}", e));
-                }
-                if let Err(e) = mac_window::apply_spaces_behavior(&win) {
-                    debug_log::log(&format!("spaces behavior: {}", e));
                 }
             }
 
@@ -948,10 +996,7 @@ pub fn run() {
                 .iter()
                 .any(|e| secrets::has_key(&e.key_env));
             if no_key {
-                if let Some(w) = app.get_webview_window("editor") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+                show_chat(app.handle());
             }
 
             // Auto-check for updates a few seconds after launch, then every
@@ -1199,6 +1244,51 @@ mod popover_tests {
         let icon = PixelRect { x: 1200.0, y: 0.0, w: 24.0, h: 24.0 };
         let (x, y) = popover_position(icon, WIN.0, WIN.1, None, GAP);
         assert_eq!((x, y), (1212.0 - WIN.0 / 2.0, 30.0));
+    }
+}
+
+/// How the chat behaves across desktops. Read from `mac_window.rs` because the
+/// behaviour is three AppKit flags and a delegate, none of which can be observed
+/// without a screen — but all of which can be lost in one edit.
+#[cfg(test)]
+mod spaces_tests {
+    fn panel_code() -> &'static str {
+        include_str!("mac_window.rs")
+    }
+
+    /// The chat has to arrive on the desktop the user is on and stay off the
+    /// others. CanJoinAllSpaces bought the first at the cost of the second: the
+    /// window was resident on *every* Space, so swiping to the next desktop
+    /// showed it there mid-swipe and then took it away — reported as "Quill
+    /// flashes in the middle of the screen when I change desktops". The panel's
+    /// MoveToActiveSpace is the mechanism that gets both.
+    #[test]
+    fn the_chat_follows_the_user_instead_of_living_on_every_desktop() {
+        let code = panel_code();
+        assert!(
+            code.contains("move_to_active_space()"),
+            "the panel no longer follows the user to the active Space"
+        );
+        assert!(
+            !code.contains("setCollectionBehavior"),
+            "the hand-rolled CanJoinAllSpaces is back — the chat will sit on every desktop again"
+        );
+    }
+
+    /// Focus leaves → back to the tray. On macOS this is the panel's own
+    /// delegate: a non-activating panel never activates the app, so Tauri's
+    /// window-focus event does not fire and this is the only place it can hang.
+    #[test]
+    fn the_panel_hides_itself_when_focus_leaves() {
+        let code = panel_code();
+        assert!(
+            code.contains("window_did_resign_key(move |"),
+            "nothing hides the panel when focus leaves it"
+        );
+        assert!(
+            code.contains("nonactivating_panel()"),
+            "the chat activates Quill when it opens — that teleports the user to another desktop"
+        );
     }
 }
 

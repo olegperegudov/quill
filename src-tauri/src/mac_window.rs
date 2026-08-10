@@ -47,36 +47,109 @@ pub fn apply_rounded_corners(_window: &tauri::WebviewWindow, _radius: f64) -> Re
     Ok(())
 }
 
-/// Make the chat appear on whatever Space the user is currently on, never
-/// switching Spaces.
-///
-/// We position the window at the cursor *before* showing it. With
-/// MoveToActiveSpace the window still kept a "home" Space, so popping it at the
-/// cursor teleported the user to that Space (the bug reported: "the hotkey moves
-/// me to another desktop"). CanJoinAllSpaces gives the window no home Space at
-/// all — it's resident on every Space — so showing it at the cursor always lands
-/// on the current desktop. It's hidden between uses, so "on every Space" is
-/// never visible as clutter. (Ribbit can use MoveToActiveSpace because it
-/// doesn't reposition the window; we do, which is what exposed the home-Space.)
-///
-/// NSWindowCollectionBehaviorCanJoinAllSpaces = 1 << 0 = 1.
+// The chat window is turned into a non-activating NSPanel, the same mechanism
+// Ribbit uses and the one Spotlight/Raycast are built on. Two things a plain
+// NSWindow cannot do, and Quill needs both:
+//
+// * Appear on the Space the user is on *right now* without activating the app.
+//   Activating teleports the user to the window's home Space — the bug behind
+//   "the hotkey moves me to another desktop".
+// * Leave the other Spaces alone. The workaround that used to buy the first
+//   point was CanJoinAllSpaces, which gives the window no home Space by making
+//   it resident on *every* Space: swipe to the next desktop and the chat was
+//   already sitting there, only to vanish when the swipe finished. The panel
+//   takes MoveToActiveSpace instead — it follows the user when summoned and
+//   stays behind on the old desktop when they swipe away, which is what the
+//   frog does and what Quill is supposed to do.
+//
+// The tauri_panel! macro expansion calls `.app_handle()`, which needs Manager.
 #[cfg(target_os = "macos")]
-pub fn apply_spaces_behavior(window: &tauri::WebviewWindow) -> Result<(), String> {
-    use cocoa::base::id;
-    use objc::{msg_send, sel, sel_impl};
+use tauri::Manager as _;
 
-    let ns_window = window.ns_window().map_err(|e| e.to_string())? as id;
-    unsafe {
-        let behavior: u64 = 1 << 0;
-        let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
-        crate::debug_log::log("collectionBehavior=CanJoinAllSpaces applied");
-    }
+#[cfg(target_os = "macos")]
+tauri_nspanel::tauri_panel! {
+    panel!(QuillPanel {
+        config: {
+            can_become_key_window: true,   // non-activating but still keyable → typing works
+            can_become_main_window: false,
+            is_floating_panel: false       // ordinary level; show_and_make_key brings it up
+        }
+    })
+
+    panel_event!(QuillPanelEvents {
+        window_did_resign_key(notification: &NSNotification) -> ()
+    })
+}
+
+/// Convert the chat window into the panel and configure it. Called once at
+/// setup, after the accessory activation policy is set.
+#[cfg(target_os = "macos")]
+pub fn setup_panel(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use tauri_nspanel::{CollectionBehavior, StyleMask, WebviewWindowExt};
+
+    let panel = window.to_panel::<QuillPanel>().map_err(|e| e.to_string())?;
+    // Borderless (decorations are off) and non-activating, but resizable: the
+    // desk is a window you size once, and an empty mask would nail it shut.
+    panel.set_style_mask(StyleMask::empty().nonactivating_panel().resizable().into());
+    panel.set_collection_behavior(
+        CollectionBehavior::new()
+            .full_screen_auxiliary()
+            .move_to_active_space()
+            .into(),
+    );
+    // A utility panel hides itself when the app deactivates by default; the chat
+    // stays put until focus actually leaves it.
+    panel.set_hides_on_deactivate(false);
+
+    // Focus goes elsewhere → back to the tray, one click from returning. The
+    // chat hangs off the tray icon like that icon's own menu, and menus close
+    // when you look away. Hiding, not ordering back: over a full-screen app
+    // there is no "behind", and `orderBack:` orders a window *in*.
+    let app = window.app_handle().clone();
+    let handler = QuillPanelEvents::new();
+    handler.window_did_resign_key(move |_notification| {
+        crate::note_auto_hide();
+        hide_panel(&app);
+    });
+    panel.set_event_handler(Some(handler.as_ref()));
+    // AppKit only weakly references the delegate; this one lives for the whole
+    // process, so hand its ownership over deliberately.
+    std::mem::forget(handler);
+
+    crate::debug_log::log("panel: chat window converted to non-activating NSPanel");
     Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn apply_spaces_behavior(_window: &tauri::WebviewWindow) -> Result<(), String> {
+pub fn setup_panel(_window: &tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
+}
+
+/// Whether the chat panel is currently on screen.
+#[cfg(target_os = "macos")]
+pub fn panel_visible(app: &tauri::AppHandle) -> bool {
+    use tauri_nspanel::ManagerExt;
+    app.get_webview_panel("editor").map(|p| p.is_visible()).unwrap_or(false)
+}
+
+/// Show the panel on the user's CURRENT Space (over full-screen apps included)
+/// and give it keyboard focus, without activating Quill.
+#[cfg(target_os = "macos")]
+pub fn show_panel(app: &tauri::AppHandle) {
+    use tauri_nspanel::ManagerExt;
+    match app.get_webview_panel("editor") {
+        Ok(p) => p.show_and_make_key(),
+        Err(e) => crate::debug_log::log(&format!("show_panel: panel not found ({:?})", e)),
+    }
+}
+
+/// Hide the panel to the tray.
+#[cfg(target_os = "macos")]
+pub fn hide_panel(app: &tauri::AppHandle) {
+    use tauri_nspanel::ManagerExt;
+    if let Ok(p) = app.get_webview_panel("editor") {
+        p.hide();
+    }
 }
 
 /// Move the window so it's centred on the mouse cursor, clamped to stay fully on

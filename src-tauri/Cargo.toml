@@ -49,3 +49,9 @@ core-foundation = "0.10"
 # reliable way to copy the selection (enigo's separate-modifier chord left the
 # flag off and copied nothing). See selection.rs.
 core-graphics = "0.24"
+# Turns the borderless chat window into a non-activating NSPanel: it surfaces on
+# the Space the user is on right now (over a full-screen app included) without
+# activating Quill, and leaves the other desktops alone. A plain NSWindow can do
+# neither — see mac_window.rs. Same mechanism as Ribbit.
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+
