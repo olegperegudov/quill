@@ -35,3 +35,6 @@ CLAUDE.md
 *.sln
 *.sw?
 __pycache__/
+
+# Design-tool scratch (not for the public repo)
+.impeccable/

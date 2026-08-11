@@ -148,6 +148,8 @@ jobs:
         run: "$HOME/.cargo/bin/cargo test --lib"
 
       - name: Build Tauri app
+        id: build_win
+        continue-on-error: true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -160,7 +162,25 @@ jobs:
           # What changed in this build, cut from the changelog by the version job.
           releaseBody: ${{ needs.version.outputs.notes || 'See the assets below to download and install.' }}
           releaseDraft: false
-          prerelease: false
+          prerelease: true
+      # The build is reliable; the upload occasionally dies on a transient
+      # GitHub API timeout. There is no native retry for a `uses:` step, so
+      # repeat it once — the rebuild comes off the warm Rust cache.
+      - name: Build Tauri app (retry)
+        if: steps.build_win.outcome == 'failure'
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          args: --target x86_64-pc-windows-msvc --bundles nsis
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Quill ${{ needs.version.outputs.tag }}
+          # What changed in this build, cut from the changelog by the version job.
+          releaseBody: ${{ needs.version.outputs.notes || 'See the assets below to download and install.' }}
+          releaseDraft: false
+          prerelease: true
 
       # Re-upload the installer under a stable, version-less name so the
       # README "Download for Windows" button can link straight to the file
@@ -174,6 +194,45 @@ jobs:
           exe=$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe | head -1)
           cp "$exe" Quill_Windows_Setup.exe
           gh release upload "$TAG" Quill_Windows_Setup.exe --clobber --repo "$GITHUB_REPOSITORY"
+
+      # Stage check on the real OS: install what we are about to ship, launch it,
+      # and demand it still be alive 10s later with the right version. A tray app
+      # has no window to assert on — a living process IS the smoke signal.
+      - name: Smoke-test installed app
+        shell: pwsh
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Start-Process -FilePath ".\Quill_Windows_Setup.exe" -ArgumentList "/S" -Wait
+
+          # Tauri NSIS (installMode currentUser) installs under %LOCALAPPDATA%\<ProductName>.
+          $installDir = Join-Path $env:LOCALAPPDATA "Quill"
+          $exe = Get-ChildItem (Join-Path $installDir "*.exe") -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch "unins" } | Select-Object -First 1
+          if (-not $exe) { Write-Host "::error::installed binary not found under $installDir"; exit 1 }
+
+          $ver = $exe.VersionInfo.ProductVersion
+          if ("v$ver" -ne $env:TAG) {
+            Write-Host "::error::installed version '$ver' != tag '$env:TAG'"
+            exit 1
+          }
+
+          $proc = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 10
+          $appLog = Join-Path $env:APPDATA "quill\logs\debug.log"
+          if (-not (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) {
+            $code = try { $proc.ExitCode } catch { "unknown" }
+            Write-Host "::error::Quill exited within 10s of launch on a clean machine (exit code $code)"
+            if (Test-Path $appLog) { Write-Host "--- debug.log tail ---"; Get-Content $appLog -Tail 50 }
+            exit 1
+          }
+          Write-Host "Quill alive after 10s (PID $($proc.Id))"
+
+          Stop-Process -Id $proc.Id -Force
+          # Leave the runner clean; best-effort, runners are ephemeral.
+          $unins = Get-ChildItem (Join-Path $installDir "unins*.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($unins) { Start-Process -FilePath $unins.FullName -ArgumentList "/S" -Wait }
 
   build-macos:
     needs: [version, test]
@@ -257,6 +316,8 @@ jobs:
             || { echo "::error::signing identity '$APPLE_SIGNING_IDENTITY' did not resolve"; exit 1; }
 
       - name: Build Tauri app (Apple Silicon)
+        id: build_arm
+        continue-on-error: true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -274,9 +335,34 @@ jobs:
           # What changed in this build, cut from the changelog by the version job.
           releaseBody: ${{ needs.version.outputs.notes || 'See the assets below to download and install.' }}
           releaseDraft: false
-          prerelease: false
+          prerelease: true
+      # The build is reliable; the upload occasionally dies on a transient
+      # GitHub API timeout. There is no native retry for a `uses:` step, so
+      # repeat it once — the rebuild comes off the warm Rust cache.
+      - name: Build Tauri app (Apple Silicon) (retry)
+        if: steps.build_arm.outcome == 'failure'
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Stable self-signed code signing: the trusted keychain is prepared in
+          # the step above. Anchoring the signature to the cert (not the cdhash)
+          # keeps the macOS Accessibility grant alive across updates. Not
+          # notarized (no APPLE_ID) — first launch still needs right-click→Open.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        with:
+          args: --target aarch64-apple-darwin --bundles app,dmg
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Quill ${{ needs.version.outputs.tag }}
+          # What changed in this build, cut from the changelog by the version job.
+          releaseBody: ${{ needs.version.outputs.notes || 'See the assets below to download and install.' }}
+          releaseDraft: false
+          prerelease: true
 
       - name: Build Tauri app (Intel)
+        id: build_intel
+        continue-on-error: true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -292,7 +378,28 @@ jobs:
           # What changed in this build, cut from the changelog by the version job.
           releaseBody: ${{ needs.version.outputs.notes || 'See the assets below to download and install.' }}
           releaseDraft: false
-          prerelease: false
+          prerelease: true
+      # The build is reliable; the upload occasionally dies on a transient
+      # GitHub API timeout. There is no native retry for a `uses:` step, so
+      # repeat it once — the rebuild comes off the warm Rust cache.
+      - name: Build Tauri app (Intel) (retry)
+        if: steps.build_intel.outcome == 'failure'
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Signs with the trusted self-signed identity from the keychain set up
+          # before the Apple Silicon build (same runner, persists across steps).
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        with:
+          args: --target x86_64-apple-darwin --bundles app,dmg
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: Quill ${{ needs.version.outputs.tag }}
+          # What changed in this build, cut from the changelog by the version job.
+          releaseBody: ${{ needs.version.outputs.notes || 'See the assets below to download and install.' }}
+          releaseDraft: false
+          prerelease: true
 
       # Stable, version-less copies for the README download buttons (both
       # Macs). Direct links: releases/latest/download/Quill_macOS_*.dmg.
@@ -307,3 +414,82 @@ jobs:
           cp "$arm" Quill_macOS_AppleSilicon.dmg
           cp "$intel" Quill_macOS_Intel.dmg
           gh release upload "$TAG" Quill_macOS_AppleSilicon.dmg Quill_macOS_Intel.dmg --clobber --repo "$GITHUB_REPOSITORY"
+
+      # Release smoke: the bundle the user is about to install must be signed,
+      # must claim the version we tagged, and must actually START on a clean
+      # machine. A mismatched Info.plist would have the updater offer the same
+      # version forever; a crash-at-launch build must never reach anyone.
+      - name: Smoke-test macOS bundles
+        shell: bash
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            app=$(ls -d src-tauri/target/$arch/release/bundle/macos/*.app | head -1)
+            echo "== $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            plist_ver=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist")
+            if [ "v$plist_ver" != "$TAG" ]; then
+              echo "::error::$app version $plist_ver != tag $TAG"
+              exit 1
+            fi
+
+            # The runner is Apple Silicon: the Intel build can only launch via
+            # Rosetta, and a runner without it is NOT evidence the build is
+            # broken — skip the launch, keep codesign and version.
+            native=$(uname -m)
+            if [ "$arch" = "x86_64-apple-darwin" ] && [ "$native" = "arm64" ] \
+               && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+              echo "::notice::Rosetta unavailable — skipping launch smoke for the Intel build (codesign + version OK)"
+              continue
+            fi
+            bin=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Contents/Info.plist")
+            "$app/Contents/MacOS/$bin" & pid=$!
+            sleep 10
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "Quill ($arch) alive after 10s (PID $pid)"
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+            else
+              code=0; wait "$pid" || code=$?
+              echo "::error::Quill ($arch) exited within 10s of launch on a clean machine (exit code $code)"
+              log="$HOME/Library/Application Support/quill/logs/debug.log"
+              [ -f "$log" ] && { echo "--- debug.log tail ---"; tail -50 "$log"; }
+              exit 1
+            fi
+          done
+
+      # The in-app updater is only as good as latest.json. Fail loudly here rather
+      # than ship a manifest that silently strands one platform on an old version.
+      - name: Verify updater manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p latest.json --clobber
+          python3 .github/scripts/verify_manifest.py latest.json "$TAG"
+
+  # The stable channel moves only after every gate above is green: unit tests,
+  # both platform builds, the install-and-launch stage checks inside them, and
+  # the manifest verification. That is what the prerelease window is for — a
+  # release nobody promotes is a release nobody receives. If a promoted build
+  # turns out bad, demote it by hand: Actions → Release control → rollback.
+  promote:
+    needs: [version, test, build-windows, build-macos]
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Promote to stable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --prerelease=false --latest=true
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" \
+            --jq '"stable channel now serves \(.tag_name)"'

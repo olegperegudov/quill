@@ -42,6 +42,10 @@ Every push to `main` is a release. CI bumps the patch version itself, tags it, b
 
 Each release also carries version-less copies of the installers (`Quill_macOS_AppleSilicon.dmg`, `Quill_macOS_Intel.dmg`, `Quill_Windows_Setup.exe`) so the README buttons can link straight at a file that survives the next bump.
 
+The release is published as a **prerelease** and reaches nobody until it is promoted. Between the two, CI installs the build on real runners and demands it start: on Windows the NSIS installer runs silently, the installed `ProductVersion` must equal the tag and the process must still be alive 10s after launch; on macOS `codesign --verify --deep --strict`, the `Info.plist` version and the same 10-second launch (the Intel launch is skipped with a notice when the runner has no Rosetta). A tray app has no window to assert on — a living process is the smoke signal. Then `latest.json` is verified (all three platforms, version matches the tag, no universal macOS bundle) and only then does the `promote` job mark the release latest, which is what the updater follows.
+
+Any red gate leaves the build a prerelease and stable users keep the previous version. To move the channel by hand — after a bad release, or to ship a build whose gate flaked — use **Actions → Release control**: `promote` or `rollback` with the tag.
+
 ## Signing
 
 macOS builds are signed with a stable self-signed certificate, not ad-hoc. macOS binds the Accessibility grant to the *signature*, so the user grants it once, at install, and updates never re-ask — an ad-hoc signature changes with every build and would.

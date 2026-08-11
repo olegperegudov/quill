@@ -9,6 +9,18 @@ stay here, out of the release.
 
 ## Unreleased
 
+- An update is now offered only after that exact build has been installed and
+  started on a clean machine.
+    - Every push-built release is published as a prerelease and promoted to
+      latest only once each gate is green: unit tests, both platform builds,
+      the install-and-launch stage checks on Windows and macOS runners, and the
+      manifest verification. A red gate leaves the build unpromoted, so the
+      stable endpoint keeps serving the previous release. Rollback is a manual
+      button: Actions → Release control → `rollback` with the last good tag.
+      Quill was the one app with neither the manifest check nor a retry on the
+      build steps — both came over with the gates; the manifest guard lives in
+      `.github/scripts/verify_manifest.py`, shared by the two workflows.
+
 ## v0.1.51 — 2026-08-11
 
 - The window is driven from the keyboard: paste (or arrive by hotkey), Enter
