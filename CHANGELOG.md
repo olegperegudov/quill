@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.51 — 2026-08-11
+
 - The window is driven from the keyboard: paste (or arrive by hotkey), Enter
   corrects, Enter copies the result and closes. The second press can be given
   before the answer exists — the window goes at once and the correction lands in
