@@ -25,6 +25,12 @@ punctuation, grammar, capitalisation — in Russian or English, without changing
 the meaning, the wording, or the tone. It is a corrector, not a rewriter and not
 a translator.
 
+Most of that raw text is dictation: a transcriber hands back a wall of words with
+no punctuation and every "ну / вот / как бы" the mouth produced. So the corrector
+also drops filler words and the stumbles dictation leaves behind (confirmed
+2026-08-11) — and nothing beyond that. Making speech read as written prose is the
+failure mode, not the goal: the author has to still recognise the sentence.
+
 Success is that the text can be pasted onward without a second read, and that
 the user can see at a glance what was wrong, so the same mistake is his own next
 time.

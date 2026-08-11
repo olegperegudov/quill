@@ -6,7 +6,7 @@
 
 <p align="center">
   Clean up your writing without leaving the window you're in.<br/>
-  Select the text, press a hotkey — spelling, punctuation and grammar fixed, your meaning untouched.
+  Select the text, press a hotkey — punctuation restored, filler words dropped, your meaning untouched.
 </p>
 
 <p align="center">

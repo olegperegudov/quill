@@ -81,12 +81,23 @@ pub fn find_provider(name: &str) -> Option<&'static ProviderConfig> {
 /// Bilingual (RU + EN): the model detects the language itself and answers in the
 /// same one. "Do not translate" is spelled out because otherwise the model
 /// sometimes "helpfully" turns RU into EN or vice versa.
+///
+/// Most of what lands here is dictation that came back from a transcriber with
+/// no punctuation and every "ну / вот / как бы" the mouth produced. So the job is
+/// two things and nothing more: put the punctuation back, and take the fillers
+/// out. The half-dozen "do NOT" clauses are the brake — asked to clean up, a
+/// model happily promotes casual speech to written prose, and the author stops
+/// recognising their own sentence.
 pub const DEFAULT_INSTRUCTION: &str = "You are a bilingual writing editor for Russian and English. \
-The user sends a fragment of text they just wrote in a chat, email, or form. \
-Fix spelling, punctuation, and grammar, and lightly smooth clumsy phrasing. \
-Do NOT change the meaning, the tone, or the register. Do NOT translate — keep \
-the original language. Do NOT add, remove, or summarize content. Preserve the \
-author's voice; a casual message stays casual. Detect the language from the \
+The user sends a fragment they just wrote or dictated, so it often arrives with no punctuation at \
+all. Restore punctuation and capitalisation, fix spelling and grammar, and delete filler words and \
+verbal tics that carry no meaning — ну, вот, как бы, типа, короче, значит, в общем, собственно, \
+прям, реально, well, like, you know, I mean, basically, actually — along with the stray repetitions \
+and false starts dictation leaves behind. Keep such a word when it is doing real work in the \
+sentence. Then lightly smooth phrasing that is genuinely clumsy, and stop there: do NOT make the \
+text more formal, more literary, or more polished than it was, do NOT change the meaning, the tone, \
+or the register, do NOT translate — keep the original language, do NOT add, remove, or summarize \
+content. A casual message stays casual — it just stops stuttering. Detect the language from the \
 text and reply in that same language.";
 
 /// The two sentences Quill appends to whatever instruction is in force, and
@@ -292,6 +303,13 @@ mod tests {
         assert!(p.to_lowercase().contains("do not translate"), "must not translate");
         assert!(p.contains("tone"), "must preserve tone");
         assert!(p.contains("Return ONLY the corrected text"), "output must be clean");
+        // The two halves of the job. Punctuation is why the text is here at all
+        // (the transcriber returns none); the fillers are what the author cannot
+        // strip by hand without rereading their own paragraph.
+        assert!(p.contains("Restore punctuation"), "must put punctuation back");
+        assert!(p.contains("filler words"), "must drop the fillers");
+        // And the brake on the above: cleaning up is not licence to rewrite.
+        assert!(p.contains("more literary"), "must not promote speech to prose");
     }
 
     /// The instruction is the user's to rewrite; the guard is not. Whatever they

@@ -9,6 +9,18 @@ stay here, out of the release.
 
 ## Unreleased
 
+- Filler words go out with the corrections: "ну", "вот", "как бы", "типа",
+  "короче", "like", "you know" and the stumbles dictation leaves behind. The
+  wording around them stays yours — the text does not get more literary.
+    - The shipped instruction now names the job as two things: put the
+      punctuation back (most input is transcriber output with none at all) and
+      take the fillers out, with an explicit brake against promoting speech to
+      written prose — asked to clean up, a model will otherwise return a
+      paragraph the author no longer recognises. `corrector.rs` tests pin all
+      three clauses. Checked live against gemma-4-26b on a dictated paragraph
+      and on a raw unpunctuated one: fillers gone, sentence shape intact.
+      A hand-edited prompt in Settings still overrides the whole thing.
+
 ## v0.1.52 — 2026-08-11
 
 - An update is now offered only after that exact build has been installed and
