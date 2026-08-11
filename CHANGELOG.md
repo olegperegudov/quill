@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.53 — 2026-08-11
+
 - Filler words go out with the corrections: "ну", "вот", "как бы", "типа",
   "короче", "like", "you know" and the stumbles dictation leaves behind. The
   wording around them stays yours — the text does not get more literary.
