@@ -1,38 +1,42 @@
-/* Quill — the one window. The titlebar stays put; below it the body swaps
-   between the chat (hotkey surface), settings, and the debug log — the gear
-   flips chat ↔ settings (.view-panel, below). Ribbit-style view switch.
+/* Quill — the one window. The bar at the top stays put; below it the body swaps
+   between the history, settings and the debug log — the gear flips history ↔
+   settings (.view-panel, below).
 
-   Visual world (2026-08-10, replaces the tray-chat look): the dictation desk.
-   A machine typed the transcript, Quill went over it with a red ribbon, and the
-   finished text lies below on the one sheet of real paper in the window — which
-   is also the only thing a click copies. No bubbles, no avatars, no blue: the
-   window is a document under correction, not a conversation. */
+   Visual world (2026-08-11, replaces the dictation desk): the keyboard shelf.
+   Cold graphite, one system face, no paper and no second ground. The finished
+   text is the only thing on screen; the marks that made it are one arrow key
+   away. Everything the window does, it does from the keyboard — so the state
+   the keys act on (which entry is selected) is the loudest thing here, and the
+   keys themselves are named along the bottom edge. */
 
 :root {
-  /* Faces. The mono is named for both shipped platforms: falling to generic
-     `monospace` on Windows changed the character of every label. */
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Segoe UI Mono", monospace;
-  --machine-face: "Courier New", Courier, var(--mono);
-  --paper-face: Georgia, "Times New Roman", serif;
-  /* The desk */
-  --ground: #17150f;       /* warm graphite, the desk surface */
-  --ground-deep: #131109;  /* titlebar and composer, one step down */
-  --rule: #2e2a20;         /* hairlines between sheets */
-  --rule-soft: #241f16;
-  /* The machine */
-  --machine: #b7ae99;      /* what the transcriber typed */
-  --slug: #9a8f78;         /* the small labels above each block */
-  --slug-dim: #8d8371;
-  /* The ribbon */
-  --ribbon: #d2554a;       /* struck out: what Quill dropped */
-  --ribbon-hi: #e5564c;    /* typed in: what Quill added */
-  /* The paper */
-  --paper: #efe9dc;
-  --paper-edge: #cfc7b4;
-  --paper-ink: #16130d;
-  --paper-slug: #6f6552;
-  --stamp: #2f6b46;        /* office stamp green — "copied", on paper */
-  --stamp-wash: #dfe8d9;
+
+  --ground: #101216;       /* the window */
+  --raised: #171a20;       /* the field, boxes inside settings */
+  --raised-hi: #191d24;    /* the field, once it holds something */
+  --sel: #14171d;          /* the selected entry */
+  --edge: #212630;         /* the field's rim */
+  --edge-hi: #2c333f;
+  --rule: #1c1f26;         /* hairlines */
+
+  --ink: #e7e8ea;          /* the finished text */
+  --ink-2: #cdd0d5;        /* the same text, not selected */
+  --ink-3: #9ea3ab;        /* the dictated text under its marks */
+  --dim: #7c828c;          /* meta, hints */
+  --faint: #5f656e;        /* day labels, placeholders */
+  --mute: #565c65;         /* the key strip */
+
+  --accent: #e2a13f;       /* where you are, and what you can press */
+  --del: #ef8f84;          /* what the correction dropped */
+  --ins: #6fd39a;          /* what it added */
+  --ok: #62c08a;           /* copied */
+  --warn: #e0b07c;
+  --err: #e2a49c;
+  --find: #3a2d68;         /* the search hit */
+  --find-ink: #cfc0f5;
+
+  --bar: 34px;             /* the height of the quill, the field and the gear */
   --radius: 10px;
 }
 
@@ -40,9 +44,8 @@
 
 /* The window is borderless + transparent, so the page IS the app's skin: any
    elastic scroll of the document drags that skin around and exposes whatever
-   sits behind the window. Pin the root and forbid the bounce (CopyPaster does
-   the same); inner scrollers below get overscroll-behavior:contain so hitting
-   their end doesn't chain the gesture up to the document. */
+   sits behind the window. Pin the root and forbid the bounce; inner scrollers
+   get overscroll-behavior:contain so hitting their end doesn't chain up. */
 html, body {
   height: 100%;
   background: transparent;
@@ -52,14 +55,13 @@ html, body {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  color: var(--machine);
+  color: var(--ink);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 
-.chat {
-  position: relative;            /* anchor for the settings/debug overlays */
+.win {
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -68,295 +70,269 @@ body {
   overflow: hidden;
 }
 
-/* Titlebar ------------------------------------------------------------- */
-.titlebar {
+/* The bar ------------------------------------------------------------- */
+/* Quill, field, gear — one height, equal boxes on both ends. A pixel of
+   asymmetry here is the first thing the eye finds, because there is nothing
+   else in the row to look at. */
+.top {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.6rem;
+}
+.quill, .gear {
   flex-shrink: 0;
-  gap: 0.5rem;
-  padding: 0.55rem 0.55rem 0.5rem 0.7rem;
-  background: var(--ground-deep);
-  border-bottom: 1px solid var(--rule);
-}
-.brand { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
-/* The pixel feather, same file the README and the tray icon are cut from —
-   pixel art, so no smoothing on the way down to 18px. */
-.mark { width: 18px; height: 18px; flex-shrink: 0; image-rendering: pixelated; }
-.brand-text { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
-/* Silkscreened on the machine's case, not set as a logotype. */
-.wordmark {
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #cdc4ad;
-}
-.win-controls { display: flex; gap: 0.15rem; flex-shrink: 0; }
-.win-btn {
-  width: 24px; height: 24px;
-  display: grid; place-items: center;
-  background: transparent;
+  width: var(--bar);
+  height: var(--bar);
+  display: grid;
+  place-items: center;
+  background: none;
   border: none;
-  color: var(--slug);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: background 0.12s, color 0.12s;
 }
-.win-btn:hover { background: #221e15; color: var(--machine); }
-.win-btn.active { background: #221e15; color: var(--ribbon-hi); }
-.win-close:hover { background: #3a1a16; color: #ffb4ac; }
+/* The pixel feather, same file the README and the tray icon are cut from — pixel
+   art, so no smoothing on the way down. */
+.quill {
+  background-image: url("quill.png");
+  background-size: 26px 26px;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+}
+.gear { color: var(--dim); cursor: pointer; border-radius: 8px; transition: color 0.12s, background 0.12s; }
+.gear:hover { color: var(--ink); background: var(--raised); }
+.gear.active { color: var(--accent); }
 
-/* The log — a stack of sheets ------------------------------------------ */
+/* A pill: the radius is half the height, not "a rounded rectangle". */
+.field-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--bar);
+  display: flex;
+  align-items: center;
+  background: var(--raised);
+  border: 1px solid var(--edge);
+  border-radius: calc(var(--bar) / 2);
+  transition: border-color 0.15s, background 0.15s, border-radius 0.15s;
+}
+.field-wrap.hot { background: var(--raised-hi); border-color: var(--edge-hi); }
+/* Grown to hold a pasted paragraph: round sides start eating the lines, so the
+   radius steps down to an ordinary one. */
+.field-wrap.tall { border-radius: 14px; }
+
+.field {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  /* 7 + 18 + 7 fills the pill exactly, so the text sits on its centre line.
+     The left inset is a full radius — a round side clips a letter set flush. */
+  padding: 7px 0 7px 17px;
+  max-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.field::placeholder { color: var(--faint); }
+/* The one hint inside the pill: there is something to send. */
+.ret {
+  flex-shrink: 0;
+  margin: 0 10px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--dim);
+  background: #1e222a;
+  border-radius: 5px;
+  padding: 0.08rem 0.3rem;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.field-wrap.hot .ret { opacity: 1; }
+
+/* Settings and the debug log put their name where the field was. */
+.panel-title {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #b9bcc2;
+  display: none;
+}
+.status-detail {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-detail:empty { display: none; }
+.status-detail.working { color: var(--accent); }
+.status-detail.done { color: var(--ok); }
+.status-detail.error { color: var(--err); }
+
+/* The history --------------------------------------------------------- */
 .log {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
+  padding-bottom: 0.5rem;
 }
 
-/* One correction: the marked-up transcript, then the clean sheet under it. */
-.entry { border-bottom: 1px solid var(--rule); padding: 0.65rem 0.8rem 0.8rem; }
-.entry:last-child { border-bottom: none; }
-
-/* The small label above each block: what this is, and how many edits. */
-.slug {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6rem;
+.day {
+  padding: 0.85rem 0.9rem 0.35rem;
   font-family: var(--mono);
   font-size: 0.6rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--slug);
-  margin-bottom: 0.4rem;
+  color: var(--faint);
 }
-.slug .edits { color: var(--ribbon); flex-shrink: 0; }
-.slug .edits:empty { display: none; }
+.day:first-child { padding-top: 0.3rem; }
 
-/* What the machine typed, with Quill's marks in the ribbon's own red. */
-.draft {
-  font-family: var(--machine-face);
-  font-size: 12.5px;
-  line-height: 1.72;
-  color: var(--machine);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: text;
-  -webkit-user-select: text;
+/* One correction. The rail on the left says which one the keys will act on. */
+.entry {
+  padding: 0.4rem 0.9rem 0.6rem;
+  border-left: 2px solid transparent;
+  cursor: default;
 }
-.draft del {
-  color: var(--ribbon);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-}
-.draft ins { color: var(--ribbon-hi); text-decoration: none; }
-/* A replaced word ("сео" → "SEO") shares one space with its neighbours, so the
-   two halves would touch. Part them without inventing a space in the text. */
-.draft del + ins { margin-left: 3px; }
+.entry.sel { background: var(--sel); border-left-color: var(--accent); }
 
-/* The finished text: the one sheet of paper in the window, and the only thing a
-   click copies. It is the brightest surface here because it is the deliverable. */
-.sheet {
-  margin-top: 0.7rem;
-  padding: 0.6rem 0.7rem 0.7rem;
-  background: var(--paper);
-  color: var(--paper-ink);
-  border-radius: 2px;
-  box-shadow: 0 1px 0 var(--paper-edge), 0 10px 18px -14px rgba(0, 0, 0, 0.9);
-  font-family: var(--paper-face);
+.txt {
   font-size: 13.5px;
-  line-height: 1.62;
+  line-height: 1.6;
+  color: var(--ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  cursor: pointer;
   user-select: text;
   -webkit-user-select: text;
-  /* The copy flash rides these: it lands at once (.copied kills the transition)
-     and fades back out over a fifth of a second. */
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
-.sheet .slug { color: var(--paper-slug); }
-.sheet:focus-visible {
-  outline: none;
-  box-shadow: 0 1px 0 var(--paper-edge), 0 0 0 2px var(--ribbon), 0 10px 18px -14px rgba(0,0,0,.9);
+.entry.sel .txt { color: var(--ink); }
+/* Showing what was dictated: the text steps back half a tone so the marks read
+   as marks and not as speckle over white. */
+.entry.was .txt { color: var(--ink-3); }
+/* Colour plus one stroke. A wash behind every inserted comma turns a corrected
+   paragraph into mosaic, and a dictated one carries two dozen of them. */
+.txt del {
+  color: var(--del);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: rgba(239, 143, 132, 0.85);
 }
-.sheet:hover { box-shadow: 0 1px 0 var(--paper-edge), 0 0 0 1px var(--paper-edge), 0 10px 18px -14px rgba(0,0,0,.9); }
-
-/* Copied — the whole sheet answers, the way Ribbit's log lines do: it takes the
-   stamp's green at once and settles back. A badge in the corner asks to be
-   looked for; the text under the cursor changing colour does not. */
-.sheet.copied {
-  transition: none;
-  background: var(--stamp-wash);
-  color: var(--stamp);
-  box-shadow: 0 1px 0 #b9c9b2, 0 0 0 1px #9fb599, 0 10px 18px -14px rgba(0,0,0,.9);
-}
-.sheet.copied .slug { color: var(--stamp); }
-
-/* Nothing to correct: no marks, no second block — one sheet, said plainly. */
-.entry--clean .sheet { margin-top: 0; }
-
-/* Nothing on the desk yet — a blank sheet, ruled and waiting, with the two ways
-   in typed on it. Quiet on purpose: it is furniture, not an announcement. */
-.blank {
-  margin: auto 0;
-  padding: 1.4rem 0.9rem;
-  display: grid;
-  place-items: center;
-}
-.blank-sheet {
-  width: 100%;
-  max-width: 22rem;
-  padding: 1.1rem 1.2rem;
-  border: 1px solid var(--rule);
-  border-left: none;
-  border-right: none;
-  border-radius: 2px;
-  text-align: center;
-  color: var(--slug);
-  font-family: var(--machine-face);
-  font-size: 12px;
-  line-height: 1.8;
-}
-.blank-sheet p + p { margin-top: 0.35rem; color: var(--slug-dim); }
-.blank-sheet kbd { font-size: 0.72rem; cursor: default; }
-
-/* A note from the app itself (no key yet, no Accessibility, a failed call).
-   Not a sheet: nothing here is yours to copy. */
-.note {
-  padding: 0.7rem 0.8rem;
-  border-bottom: 1px solid var(--rule);
-  font-size: 0.78rem;
-  line-height: 1.55;
-  color: var(--slug);
-}
-.note--error { color: #e2a49c; }
-.note--error::before {
-  content: "";
-  display: inline-block;
-  width: 3px; height: 0.8em;
-  background: var(--ribbon);
-  margin-right: 0.45rem;
-  vertical-align: -0.04em;
+.txt ins {
+  color: var(--ins);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(111, 211, 154, 0.85);
 }
 
-/* Working: the ribbon runs along under the transcript while the model reads it. */
-.ribbon-run {
-  height: 2px;
-  margin-top: 0.6rem;
-  background: linear-gradient(to right, transparent, var(--ribbon), transparent);
-  background-size: 45% 100%;
-  background-repeat: no-repeat;
-  animation: ribbon 1.15s ease-in-out infinite;
-  border-radius: 1px;
-}
-@keyframes ribbon {
-  0% { background-position: -45% 0; }
-  100% { background-position: 145% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ribbon-run { animation: none; background-position: 0 0; background-size: 100% 100%; opacity: 0.5; }
-}
-
-/* Day separator — the date typed small into the margin between days. */
-.date-sep {
+.meta {
+  margin-top: 0.35rem;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.8rem 0.35rem;
-  border-bottom: 1px solid var(--rule-soft);
+  gap: 0.45rem;
+  font-size: 0.7rem;
+  color: var(--faint);
 }
-.date-sep::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
-.date-sep-label {
-  font-family: var(--mono);
-  font-size: 0.6rem;
-  color: var(--slug-dim);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  flex-shrink: 0;
+.meta .sep { color: #383d45; }
+.meta .copied { color: var(--ok); }
+.meta .failed { color: var(--err); }
+
+/* Working: the answer's place is taken the moment you press Enter, so the list
+   doesn't jump under the eye when it arrives. */
+.bar-a, .bar-b {
+  height: 8px;
+  border-radius: 4px;
+  background: #1a1e25;
+  margin-bottom: 0.45rem;
+  animation: pulse 1.15s ease-in-out infinite;
+}
+.bar-a { width: 92%; }
+.bar-b { width: 61%; animation-delay: 0.18s; }
+@keyframes pulse { 0%, 100% { opacity: 0.45 } 50% { opacity: 0.95 } }
+@media (prefers-reduced-motion: reduce) {
+  .bar-a, .bar-b { animation: none; opacity: 0.7; }
 }
 
-/* Composer ------------------------------------------------------------ */
-.composer {
-  position: relative;            /* anchor for the paper-feed hairline below */
+/* Search -------------------------------------------------------------- */
+/* A hit is shown as three lines — the one it landed on, with one line above and
+   one below — so a screenful holds several of them. */
+.snip { height: 63px; overflow: hidden; }
+.snip-inner {
+  font-size: 13px;
+  line-height: 21px;
+  color: #b7bbc2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.snip.clip-top .snip-inner { mask-image: linear-gradient(transparent 0, #000 30%); }
+.snip.clip-bot .snip-inner { mask-image: linear-gradient(#000 70%, transparent 100%); }
+.snip.clip-top.clip-bot .snip-inner {
+  mask-image: linear-gradient(transparent 0, #000 30%, #000 70%, transparent 100%);
+}
+mark {
+  background: var(--find);
+  color: var(--find-ink);
+  border-radius: 3px;
+  padding: 0.05rem 0.1rem;
+  margin: 0 -0.1rem;
+}
+
+/* Nothing to show: the two ways in, said plainly. */
+.blank {
+  padding: 2.6rem 1.4rem;
+  text-align: center;
+  color: var(--faint);
+  font-size: 0.82rem;
+  line-height: 1.9;
+}
+.blank kbd { cursor: default; }
+
+/* A note from the app itself — no key yet, no Accessibility, a failed call.
+   Not an entry: nothing here is yours to copy. */
+.note {
+  margin: 0.4rem 0.9rem;
+  padding: 0.55rem 0.65rem;
+  border-left: 2px solid var(--rule);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--dim);
+}
+.note--error { border-left-color: var(--del); color: var(--err); }
+
+/* The key strip ------------------------------------------------------- */
+.keys {
   flex-shrink: 0;
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  padding: 0.5rem 0.55rem 0.55rem 0.7rem;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.42rem 0.9rem 0.48rem;
   border-top: 1px solid var(--rule);
-  background: var(--ground-deep);
+  font-size: 0.68rem;
+  color: var(--mute);
+  overflow: hidden;
 }
-#input {
-  flex: 1;
-  resize: none;
-  max-height: 140px;
-  background: transparent;
-  border: none;
-  color: var(--machine);
-  padding: 0.4rem 0 0.35rem;
-  font-family: var(--machine-face);
-  font-size: 12.5px;
-  line-height: 1.6;
-  outline: none;
-  user-select: text;
-  -webkit-user-select: text;
-}
-#input::placeholder { color: var(--slug-dim); }
-/* The paper feed: a hairline that lights up under the text you are typing. */
-.composer::before {
-  content: "";
-  position: absolute;
-  left: 0.7rem; right: 3.1rem; bottom: 0.35rem;
-  height: 1px;
-  background: var(--rule);
-  transition: background 0.15s;
-}
-.composer:focus-within::before { background: var(--ribbon); }
-
-/* No chip around it: the composer is a ruled line, and the arrow sits on that
-   line. The stop state below is the one time it takes a filled shape. */
-.send {
-  flex-shrink: 0;
-  width: 28px; height: 28px;
-  display: grid; place-items: center;
-  background: transparent;
-  border: none;
+.keys span { display: flex; align-items: center; gap: 0.28rem; white-space: nowrap; }
+.keys b {
+  font-family: var(--mono);
+  font-weight: 400;
+  color: #868d97;
+  background: #1a1e25;
   border-radius: 4px;
-  color: var(--slug);
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s;
-}
-.send:hover { color: var(--ribbon-hi); }
-.send:focus-visible { outline: none; color: var(--ribbon-hi); background: #221e15; }
-/* Both glyphs share the single grid cell; only one shows at a time. */
-.send .i-stop { display: none; }
-.send .i-send { display: block; }
-
-/* While a correction is running the send button becomes a stop button — the
-   request is non-streaming, so this drops the pending block and lets you edit
-   and resend. */
-.composer.generating .send { background: var(--ribbon); color: #fff2f0; }
-.composer.generating .send:hover { background: var(--ribbon-hi); }
-.composer.generating .send .i-send { display: none; }
-.composer.generating .send .i-stop {
-  display: block;
-  width: 10px; height: 10px;
-  border-radius: 2px;
-  background: currentColor;
+  padding: 0.06rem 0.26rem;
 }
 
-/* Views (settings, debug) -------------------------------------------- */
-/* The titlebar above stays put; these replace the chat body in place (the gear
-   flips chat ↔ settings — Ribbit-style). A flex child, not an overlay, so the
-   gear is never covered. */
+/* Views (settings, debug) --------------------------------------------- */
 .view-panel {
   flex: 1;
   min-height: 0;
@@ -364,47 +340,16 @@ body {
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0.2rem 0.8rem 0.7rem;
-}
-
-/* Transient status beside the wordmark; hidden at rest. */
-.status-detail {
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--slug);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.status-detail:empty { display: none; }
-.status-detail.working { color: var(--ribbon-hi); }
-.status-detail.done { color: var(--stamp); }
-.status-detail.error { color: #e2a49c; }
-
-/* Debug view header (its own back button; the gear returns to chat). */
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--slug);
-  padding: 0.3rem 0 0.5rem;
+  padding: 0.1rem 0.9rem 0.7rem;
 }
 .debug-view { padding-bottom: 0.6rem; }
 
-/* Settings rows ------------------------------------------------------- */
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.6rem 0.1rem;
+  padding: 0.6rem 0;
   border-bottom: 1px solid var(--rule);
 }
 .setting-label {
@@ -412,71 +357,55 @@ body {
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--slug);
+  color: var(--dim);
   flex-shrink: 0;
 }
-#version { color: var(--slug); }
-/* Where updating went, said once and quietly. */
-.setting-hint { font-family: var(--mono); font-size: 0.62rem; color: var(--slug-dim); }
+#version { color: var(--dim); }
+.setting-hint { font-family: var(--mono); font-size: 0.62rem; color: var(--faint); }
+.setting-row--head { border-bottom: none; padding-bottom: 0.3rem; }
+.setting-note { font-family: var(--mono); font-size: 0.62rem; color: var(--faint); }
 
 /* Prompt --------------------------------------------------------------- */
-/* The instruction Quill sends with every correction, in the machine's own face:
-   it is text bound for a model, not a caption. The guard line underneath is the
-   part no setting removes, so it is stated as fact and set like a footnote. */
-.prompt-box {
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--rule);
-}
+/* The instruction Quill sends with every correction. The guard line underneath
+   is the part no setting removes, so it is stated as fact, set like a footnote. */
+.prompt-box { padding-bottom: 0.6rem; border-bottom: 1px solid var(--rule); }
 .prompt-input {
   display: block;
   width: 100%;
   max-width: none;
-  box-sizing: border-box;
   resize: none; /* the box grows to its text — a scrollbar inside a prompt hides half of it */
   overflow-y: auto;
   max-height: 15rem;
-  font-family: var(--machine-face);
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   line-height: 1.6;
-  color: var(--machine);
-  background: var(--ground-deep);
+  color: var(--ink-2);
+  background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 0.5rem 0.55rem;
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
 }
-.prompt-input:focus {
-  outline: none;
-  border-color: var(--ribbon);
-}
+.prompt-input:focus { outline: none; border-color: var(--edge-hi); }
 .prompt-guard {
   margin: 0.4rem 0 0;
-  font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   line-height: 1.5;
-  color: var(--slug-dim);
+  color: var(--faint);
 }
-/* A control that reads as text, for an action that is a correction, not a
-   command: the same weight as the "edit" link on a saved key. */
 .link-btn {
   font-family: var(--mono);
   font-size: 0.62rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--slug-dim);
+  color: var(--dim);
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
 }
-.link-btn:hover { color: var(--ribbon); }
-.link-btn:focus-visible { outline: 1px solid var(--ribbon); outline-offset: 2px; }
+.link-btn:hover { color: var(--accent); }
+.link-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
 /* Provider stack ------------------------------------------------------ */
-/* The "Models" block: one card per provider, in priority order. It sits in the
-   settings list, so it borrows the row rhythm rather than inventing its own. */
-.setting-row--head { border-bottom: none; padding-bottom: 0.3rem; }
-.setting-note { font-family: var(--mono); font-size: 0.62rem; color: var(--slug-dim); }
-
 .provider-stack {
   display: flex;
   flex-direction: column;
@@ -485,29 +414,30 @@ body {
   border-bottom: 1px solid var(--rule);
 }
 .provider-card {
-  background: #1c1912;
+  background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 0.5rem 0.55rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
-.provider-head {
+.provider-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.provider-name {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
 }
-.provider-name { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.74rem;
-                 letter-spacing: 0.08em; text-transform: uppercase; color: #cdc4ad; }
 .provider-primary-tag {
   font-family: var(--mono);
   font-size: 0.56rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--ribbon-hi);
-  border: 1px solid rgba(200, 52, 43, 0.4);
+  color: var(--accent);
+  border: 1px solid rgba(226, 161, 63, 0.35);
   border-radius: 3px;
   padding: 0.06rem 0.3rem;
 }
@@ -518,13 +448,13 @@ body {
   background: transparent;
   border: none;
   border-radius: 4px;
-  color: var(--slug);
+  color: var(--mute);
   font-size: 0.72rem;
   font-family: inherit;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
-.provider-mini-btn:hover:not(:disabled) { background: #241f16; color: var(--machine); }
+.provider-mini-btn:hover:not(:disabled) { background: #1e222a; color: var(--ink); }
 .provider-mini-btn:disabled { opacity: 0.25; cursor: default; }
 .provider-del:hover:not(:disabled) { background: #3a1a16; color: #ffb4ac; }
 
@@ -534,22 +464,16 @@ body {
   font-size: 0.62rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--slug);
+  color: var(--dim);
   width: 52px; /* fits the longest label ("endpoint") without clipping */
   flex-shrink: 0;
 }
 /* Two-class selectors on purpose: the generic `input[type="text"]` rule below is
    attribute-specific (and caps width at 60%), so a single class would lose. */
-.provider-field .provider-input {
-  flex: 1;
-  min-width: 0;
-  max-width: none;
-  font-size: 0.74rem;
-  padding: 0.28rem 0.4rem;
-}
+.provider-field .provider-input { flex: 1; min-width: 0; max-width: none; font-size: 0.74rem; padding: 0.28rem 0.4rem; }
 .provider-field .provider-input.mono { font-family: var(--mono); }
-.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--mono); font-size: 0.7rem; color: var(--slug); }
-.key-saved-check { color: #5da37c; }
+.key-status { flex: 1; display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--mono); font-size: 0.7rem; color: var(--dim); }
+.key-saved-check { color: var(--ok); }
 
 /* An active fallback must never be silent — the user would blame Quill. */
 .fallback-status {
@@ -558,105 +482,84 @@ body {
   gap: 0.35rem;
   font-family: var(--mono);
   font-size: 0.66rem;
-  color: #e0b07c;
+  color: var(--warn);
   border: 1px solid rgba(224, 176, 124, 0.28);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 0.3rem 0.45rem;
 }
 
-.provider-add select {
-  width: 100%;
-  min-width: 0;
-  color: var(--slug);
-}
-.provider-add select:hover { border-color: var(--ribbon); color: var(--machine); }
+.provider-add select { width: 100%; min-width: 0; color: var(--dim); }
+.provider-add select:hover { border-color: var(--edge-hi); color: var(--ink); }
 
-.fallback-knobs .knobs { font-family: var(--mono); font-size: 0.68rem; color: var(--slug); text-align: right; }
-.fallback-knobs input[type="number"] {
-  width: 54px;
-  text-align: center;
-  padding: 0.12rem 0.25rem;
-  font-size: 0.72rem;
-  max-width: none;
-}
+.fallback-knobs .knobs { font-family: var(--mono); font-size: 0.68rem; color: var(--dim); text-align: right; }
+.fallback-knobs input[type="number"] { width: 54px; text-align: center; padding: 0.12rem 0.25rem; font-size: 0.72rem; max-width: none; }
 
 select, input[type="password"], input[type="text"], input[type="number"] {
   font-family: var(--mono);
-  background: #1c1912;
+  background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 4px;
-  color: var(--machine);
+  border-radius: 6px;
+  color: var(--ink-2);
   padding: 0.35rem 0.5rem;
   font-size: 0.74rem;
   outline: none;
   max-width: 60%;
 }
 select { cursor: pointer; min-width: 9rem; }
-input:focus, select:focus { border-color: var(--ribbon); }
-input::placeholder { color: var(--slug-dim); }
-.key-field { display: flex; align-items: center; justify-content: flex-end; flex: 1; }
-.key-field input { flex: 1; max-width: none; }
-.saved {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: var(--slug);
-}
-.saved .check { color: #5da37c; }
-.link { color: var(--ribbon-hi); cursor: pointer; text-decoration: none; }
+input:focus, select:focus { border-color: var(--edge-hi); }
+input::placeholder { color: var(--faint); }
+.link { color: var(--accent); cursor: pointer; text-decoration: none; }
 .link:hover { text-decoration: underline; }
-.settings-note { font-size: 0.72rem; color: var(--slug-dim); padding: 0.6rem 0.1rem; }
 
 kbd {
   font-family: var(--mono);
   font-size: 0.76rem;
-  background: #1c1912;
+  background: var(--raised);
   border: 1px solid var(--rule);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 0.1rem 0.4rem;
-  color: var(--machine);
+  color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
 }
-kbd:hover { border-color: var(--ribbon); color: var(--ribbon-hi); }
-kbd.capturing { border-color: var(--ribbon); color: var(--ribbon-hi); }
+kbd:hover { border-color: var(--edge-hi); }
+kbd.capturing { border-color: var(--accent); color: var(--accent); }
 
-/* Ghost buttons (debug). */
 .ghost {
   background: transparent;
   border: 1px solid var(--rule);
-  color: var(--slug);
-  border-radius: 4px;
+  color: var(--dim);
+  border-radius: 6px;
   padding: 0.25rem 0.5rem;
   font-size: 0.72rem;
   font-family: inherit;
   cursor: pointer;
   transition: border-color 0.12s, color 0.12s;
 }
-.ghost:hover { border-color: var(--ribbon); color: var(--machine); }
+.ghost:hover { border-color: var(--edge-hi); color: var(--ink); }
 .ghost:disabled { opacity: 0.5; cursor: default; }
 
 .log::-webkit-scrollbar,
-.view-panel::-webkit-scrollbar { width: 6px; }
+.view-panel::-webkit-scrollbar,
+.field::-webkit-scrollbar { width: 6px; }
 .log::-webkit-scrollbar-thumb,
-.view-panel::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+.view-panel::-webkit-scrollbar-thumb,
+.field::-webkit-scrollbar-thumb { background: #23272f; border-radius: 3px; }
 .log::-webkit-scrollbar-thumb:hover,
-.view-panel::-webkit-scrollbar-thumb:hover { background: #3b3427; }
+.view-panel::-webkit-scrollbar-thumb:hover { background: #2f343d; }
 
-/* Debug log content */
 #debug-content {
   flex: 1;
   overflow: auto;
   overscroll-behavior: contain;
-  background: #1c1912;
+  background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 0.5rem;
   font-family: var(--mono);
   font-size: 0.68rem;
-  color: var(--slug);
+  color: var(--dim);
   white-space: pre-wrap;
   word-break: break-word;
   user-select: text;

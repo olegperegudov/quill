@@ -1,118 +1,110 @@
 # Design
 
-The window is a document under correction, not a conversation. Everything below
-is recorded from the built world (`src/editor.css`, `src/editor.js`), not from
-intentions — when the two disagree, the code is right and this file is stale.
+The window is a shelf you work from the keyboard, not a conversation. Everything
+below is recorded from the built world (`src/editor.css`, `src/editor.js`,
+`src/keys.js`), not from intentions — when the two disagree, the code is right
+and this file is stale.
 
 ## World
 
-**The dictation desk.** A machine typed the transcript; Quill went over it with a
-red ribbon; the finished text lies underneath on the one sheet of paper in the
-window. That sheet is the deliverable and the only thing a click copies.
+**The keyboard shelf.** One cold ground, one face, no paper and no second
+surface. The finished text is what is on screen; the marks that made it are one
+arrow key away, in the same place, not in a second paragraph. Nothing here is
+decoration: the loudest thing in the window is which entry the keys are pointing
+at, because that is the only state a key press depends on.
 
 What this rules out, permanently: chat bubbles, avatars, a blue accent, a send
-button as the loudest object on screen — the arrangement every LLM utility
-ships, and the one Quill wore until 2026-08-10.
+button, a second typeface, a bright field of "paper" on a night-time screen, and
+any label that repeats under every entry what the bottom strip already says once.
 
-Scene that decided dark-on-warm: one window over other apps, many times a day,
-often at night. The ground is warm graphite, not blue-black; the paper is the
-only bright field, and it is bright on purpose.
+Scene that decided it: a window that drops out from under a menu-bar icon many
+times a day, often at night, and is closed again within seconds. It is read at a
+glance and driven by two key presses; anything that asks to be aimed at with a
+mouse is in the way.
 
-## Tokens
+## Ground and light
 
-Declared on `:root` in `src/editor.css`. Measured contrast against their own
-ground in brackets — nothing that carries text sits under 4.5:1.
-
-| Token | Value | Role |
+| Token | Value | What it is |
 |---|---|---|
-| `--ground` | `#17150f` | the desk |
-| `--ground-deep` | `#131109` | titlebar, composer |
-| `--rule` / `--rule-soft` | `#2e2a20` / `#241f16` | hairlines |
-| `--machine` | `#b7ae99` | what the transcriber typed [8.3] |
-| `--slug` | `#9a8f78` | block labels [5.7] |
-| `--slug-dim` | `#8d8371` | second-rank notes, placeholders [4.9] |
-| `--ribbon` | `#d2554a` | struck out — what Quill dropped [4.5] |
-| `--ribbon-hi` | `#e5564c` | typed in — what Quill added [5.0] |
-| `--paper` | `#efe9dc` | the clean sheet |
-| `--paper-ink` | `#16130d` | text on paper [15.3] |
-| `--paper-edge` | `#cfc7b4` | the sheet's lower edge |
-| `--paper-slug` | `#6f6552` | labels on paper [4.7] |
-| `--stamp` / `--stamp-wash` | `#2f6b46` / `#dfe8d9` | the copy flash [5.0] |
+| `--ground` | `#101216` | the window |
+| `--raised` / `--raised-hi` | `#171a20` / `#191d24` | the field, boxes in settings |
+| `--sel` | `#14171d` | the selected entry |
+| `--edge` / `--edge-hi` | `#212630` / `#2c333f` | the field's rim, at rest and holding text |
+| `--rule` | `#1c1f26` | hairlines |
+| `--ink` / `--ink-2` / `--ink-3` | `#e7e8ea` / `#cdd0d5` / `#9ea3ab` | selected text, unselected, dictated-under-marks |
+| `--dim` / `--faint` / `--mute` | `#7c828c` / `#5f656e` / `#565c65` | meta, day labels, the key strip |
+| `--accent` | `#e2a13f` | where you are, and what you can press |
+| `--del` / `--ins` | `#ef8f84` / `#6fd39a` | what the correction dropped / added |
+| `--ok` | `#62c08a` | copied |
+| `--find` / `--find-ink` | `#3a2d68` / `#cfc0f5` | a search hit |
 
-Red is the correcting hand, and it is the only chromatic colour on the desk
-side. Green appears exactly once — the moment something is copied — and never as
-decoration.
+Amber is the only accent, and it means one thing: *this is what the keys act on*
+— the rail down the selected entry, the "first" tag on the model that runs, the
+one link in settings. Green never means an accent; it means done (copied), or
+added (a mark). Red only ever means dropped.
+
+The three text tones are a hierarchy, not decoration: the selected entry is
+brightest, the rest of the history a step back, and a paragraph showing its marks
+steps back further still so the red and green read as marks rather than speckle.
 
 ## Type
 
-- **Transcript**: `--machine-face` ("Courier New") 12.5px/1.72. Not a costume for
-  "technical": this text was typed by a machine, and it is set as such.
-- **Clean copy**: `--paper-face` (Georgia) 13.5px/1.62 — a reading
-  face for the finished text, with Cyrillic and Latin equally covered.
-- **Labels, wordmark, dates, settings rows and every settings value**: the
-  `--mono` stack at 0.6–0.74rem, uppercase, tracked `0.1–0.2em`. Silkscreen on a
-  machine's case. The stack names Consolas and Segoe UI Mono after the Apple
-  faces — falling through to generic `monospace` changed every label's character
-  on Windows.
-- **Notes and body chrome**: the system sans.
+One face — the system sans — at 13.5px/1.6 for the corrected text. The mono
+(`--mono`) is furniture only: day labels, the key strip, settings labels, the
+prompt box, endpoints and model ids. Anything the user wrote is in the sans;
+anything the app says about it is in the mono, small and upper-case. There is no
+third face and no serif: the old world's Georgia "paper" is gone.
 
-CSP is `default-src 'self'`: no remote fonts. A face this world eventually wants
-must be self-hosted as a woff2 inside the app.
+## The bar
 
-## Composition
+Quill, field, gear — three boxes of one height (`--bar`, 34px), the two ends
+square and equal, the field filling the rest.
 
-```
-titlebar        feather · QUILL · status                    ⚙ ✕
-────────────────────────────────────────────────────────────────
-log             (sheets stack down from the titlebar)
-  date-sep      mo, aug 10th ─────────────────────────────
-  entry         TRANSCRIPT                          5 EDITS
-                machine text with ribbon marks in place
-                ┌ CLEAN COPY · CLICK TO COPY ────────────┐
-                │ the finished text, on paper            │
-                └────────────────────────────────────────┘
-────────────────────────────────────────────────────────────────
-composer        type or paste…                            ↑
-```
+- The field is a **pill**: `border-radius: calc(var(--bar) / 2)`, not "rounded
+  corners". Its left inset is a full radius, because a round side clips a letter
+  set flush against it. The text sits on the centre line by construction
+  (7 + 18 + 7 fills the pill exactly), which is what makes the row read as
+  symmetric.
+- Grown past two lines to hold a pasted paragraph, the pill steps down to a 14px
+  radius — round sides start eating the lines.
+- The field is the only thing that ever holds focus. That is what makes ⌘V and
+  typing work without a click, and it is why the arrows only take the list once
+  the field is empty.
 
-- One `.entry` per correction; a hairline separates entries, nothing else.
-- The stack fills from under the titlebar down, as the approved prototype does;
-  dead space belongs at the bottom, where the composer is.
-- Nothing changed → no transcript block, one sheet labelled `already clean`.
-- The window opens at 520×700, min 360×420, and keeps the size it is dragged to
-  (`tauri-plugin-window-state`).
+## An entry
 
-## States
+Time, the edit count, and the text. Nothing else — no "transcript" slug, no
+"click to copy" instruction, no repeated arrow legend. The rail on the left says
+which one the keys will act on; the strip at the bottom says what the keys do.
 
-- **Empty**: a blank ruled sheet naming the real hotkey and the composer.
-- **Working**: `.ribbon-run` — a ribbon sweeping under the transcript. Held
-  still under `prefers-reduced-motion`; it is the page's one authored motion.
-- **Copied**: the sheet takes `--stamp-wash`/`--stamp` at once and fades back
-  over 0.2s (`.sheet.copied` kills the transition on the way in). 700ms.
-- **Error / app note**: `.note`, a ribbon tick in the margin, never a sheet —
-  nothing there is yours to copy.
-- **Hover**: the sheet gains an edge, not a lift.
-- **Focus**: the sheet is a `role="button"` with `tabIndex 0`, Enter and Space
-  copy it, and `:focus-visible` rings it in ribbon red. It is the app's primary
-  action; mouse-only was a defect.
+The marks are colour plus one stroke: dropped text struck through in `--del`,
+added text underlined in `--ins`. No background wash — a wash behind every
+inserted comma turns a corrected paragraph into mosaic, and a dictated one
+carries two dozen of them.
 
-## Rules that outlive this build
+## The key strip
 
-1. The clean sheet is the only copyable surface, and it copies the correction,
-   never the markup.
-2. Marks stay *in place* in the transcript. A list of edits beside the text was
-   considered (the "type specimen" alternate) and refused: the eye should not
-   have to travel to learn what changed.
-3. Green means copied. Nothing else may borrow it.
-4. Icons are drawn (`src/icons.js`) at stroke 1.7 with round caps — no glyph
-   from the emoji table stands in for one, and the settings icon is the
-   machine's control panel, not a 16px gear turned to mud.
-5. New chrome inherits the hairline-and-label grammar: 1px rules, 2px corners on
-   paper, 4px on controls, mono small-caps labels. No cards, no glass, no
-   gradients.
-6. Shared behaviour with Ribbit and Iago stays identical — the copy flash and
-   the tray split (left click opens the window, right click the menu) are the
-   family's, not Quill's alone.
+The bottom edge names what the keys do, and it changes with what the field
+holds: the list (`↑↓ history · ←→ was / now · ↵ copy and close · esc close`), a
+search (`↵ correct · ↑↓ results · esc clear`), pasted material (`↵ correct ·
+⇧↵ new line · esc clear`), and a correction in flight (`↵ take it and close ·
+esc stop`). With nothing in the history it shrinks to `esc close`: naming keys
+that cannot do anything is a promise the window does not keep.
 
-Prototypes of the two directions that lost, and the chosen one, are kept at
-`~/membeme/apps/quill/docs/design-directions.html`.
+## Motion
+
+Two pulsing bars where the answer will land, and nothing else. No slide, no
+fade-in on the list, no spinner. The bars exist for one reason: the entry's place
+is taken the moment Enter is pressed, so the list does not jump under the eye
+when the text arrives. `prefers-reduced-motion` stops the pulse.
+
+## What the window is made of
+
+- **The bar** — quill, field, gear.
+- **The history** — day labels, entries, newest first, right under the field.
+- **The key strip** — one line, bottom edge.
+- **Settings / debug log** — replace the history in place; the bar stays, the
+  field gives its place to the panel's name, and the gear is the way back.
+
+Empty history is a two-line blank: paste here, or select anywhere and press the
+hotkey. It is furniture, not an announcement.

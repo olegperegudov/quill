@@ -9,6 +9,60 @@ stay here, out of the release.
 
 ## Unreleased
 
+- The window is driven from the keyboard: paste (or arrive by hotkey), Enter
+  corrects, Enter copies the result and closes. The second press can be given
+  before the answer exists — the window goes at once and the correction lands in
+  the clipboard by itself.
+
+    The desk had one path and it went through the mouse: the correction appeared,
+    you found the clean sheet, you clicked it. Everything now hangs off one rule —
+    the field at the top is the only thing that holds focus, so ⌘V and typing land
+    there without a click, and the arrows take the history only while it is empty
+    (with text in it they belong to the caret, or a pasted paragraph cannot be
+    edited before sending). That decision is `keys.js`, pure and tested on its own;
+    `editor.js` only carries the answer out.
+
+- The correction is what you see; ← shows the same paragraph with its edits, →
+  puts it back.
+
+    The old entry printed the dictated text, its marks, and the finished text
+    under it — a near-copy of every paragraph, three label lines of chrome, and
+    the brightest object on a night-time screen was a cream sheet. One entry is
+    now one paragraph plus `time · N edits`, and what the keys do is said once
+    along the bottom edge instead of under every entry.
+
+- Typing in the same field searches the history: matches are shown three lines
+  at a time with the word picked out, and Enter still corrects what you typed.
+
+    A pasted paragraph is not a query, so the field's own shape decides: a pill
+    searches, a grown box holds material and leaves the history alone. The
+    three-line window is `.snip` (63px = 3 × 21px) with the inner text shifted so
+    the hit sits in the middle line; `MEASURE=1 node _quill_shot.mjs` prints what
+    each snippet actually clamped to, because a screenshot cannot prove
+    arithmetic.
+
+- The hotkey no longer corrects behind your back: the selection lands in the
+  field, where it can be edited first, and waits for Enter.
+
+- A letter changed inside a word is marked as that letter — "отчетов" → "отчётов"
+  no longer prints both words side by side.
+
+    A replaced token used to be struck through whole and retyped whole beside it,
+    which on dictation is nearly every word. `diff.js` now runs a second pass by
+    character inside a replaced pair and keeps it only when the change is one
+    contiguous spot; a swap ("teh" → "the") or a different word that shares
+    letters ("their" → "there") stays whole, because a scatter of single letters
+    says nothing. `lcsOps` also stopped merging adjacent ops, which had been
+    quietly defeating the case-only rule whenever a comma was inserted next to a
+    capitalised word ("слушай" → "Слушай,").
+
+- The window's visual world is new: one cold ground, one typeface, no paper. The
+  bar at the top is quill · field · gear, all of one height, the field a true
+  pill.
+
+    `DESIGN.md` is rewritten, not patched — the dictation desk is gone. The
+    prototype the world was chosen from is `~/membeme/apps/quill/docs/flow-b.html`.
+
 ## v0.1.50 — 2026-08-10
 
 - A release page is a list of what changed again, not a paragraph with the

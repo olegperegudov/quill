@@ -1,14 +1,19 @@
-//! Quill's window — the hotkey pops this at the cursor.
+//! Quill's window — the tray icon or the hotkey pops this under the pen.
 //!
-//! Flow: select text anywhere + press the hotkey → Rust captures the selection
-//! and emits `editor:capture`. The text lands as a transcript, the correction
-//! marks it up in place (struck out / typed in), and the finished text settles
-//! under it on a paper sheet. Clicking the sheet copies it — that, and only
-//! that, is what a click takes: the correction, never the marks. The composer
-//! at the bottom sends fresh text through the same path with Enter.
+//! One field at the top does two jobs: while it holds a word it searches the
+//! history, and Enter sends whatever is in it to be corrected. Everything else
+//! is keys. The field is always focused, so ⌘V lands in it without a click; the
+//! arrows only take over once the field is empty, because a pasted paragraph
+//! has to stay editable.
+//!
+//! Two presses cover the whole job: Enter corrects, Enter copies the result and
+//! closes the window. The second one may be given in advance — press it while
+//! the model is still reading and the window goes away now, the correction
+//! reaching the clipboard on its own a couple of seconds later.
 
 import { initSettings, refitPrompt } from "./settings.js";
 import { diffWords } from "./diff.js";
+import { keyAction } from "./keys.js";
 import { prettyShortcut } from "./shortcut.js";
 import { setIcon } from "./icons.js";
 
@@ -18,20 +23,38 @@ const { listen } = window.__TAURI__.event;
 const $ = (sel) => document.querySelector(sel);
 const log = $("#log");
 const input = $("#input");
-const composer = $("#composer");
+const fieldWrap = $("#field-wrap");
+const keyStrip = $("#keys");
 const settingsPanel = $("#settings-panel");
 const debugPanel = $("#debug-panel");
 const settingsBtn = $("#settings-btn");
-const sendBtn = $("#send");
+const panelTitle = $("#panel-title");
 
 // Diagnostics without DevTools (disabled in prod) — goes to the shared debug log.
 function dlog(msg) {
   try { invoke("js_debug_log", { msg: String(msg) }); } catch (_) {}
 }
 
-const scrollToBottom = () => { log.scrollTop = log.scrollHeight; };
+const IS_MAC = navigator.userAgent.includes("Mac");
 
-// --- Day separators (copied from Ribbit: weekday + month + ordinal day) ---
+// --- State -------------------------------------------------------------
+//
+// `entries` is the history, newest first — the order it is read in, so an index
+// into it is what the arrows move and what a click sets. An unfinished
+// correction is an entry too (`state: "working"`), which is why its place in
+// the list is already taken when the answer arrives.
+
+let entries = [];
+let uid = 0;
+let sel = 0;
+let mode = "list";        // "list" | "search" | "material" — set by what the field holds
+let copiedId = null;      // the entry whose meta says "copied"
+const showWas = new Set(); // entries currently showing the dictated text instead
+let hotkey = "⌃⌥E";
+
+const working = () => entries.some((e) => e.state === "working");
+
+// --- Small formatting --------------------------------------------------
 
 function ordinal(n) {
   const s = ["th", "st", "nd", "rd"];
@@ -48,336 +71,456 @@ function formatDate(iso) {
   return `${wd}, ${mon} ${day}${ordinal(day)}`;
 }
 
-// In chat order (oldest at top), drop a separator above the first message of
-// each calendar day. `lastDay` tracks the day at the bottom of the log.
-let lastDay = null;
-function ensureDay(iso) {
-  const label = formatDate(iso);
-  if (label === lastDay) return;
-  lastDay = label;
-  const sep = document.createElement("div");
-  sep.className = "date-sep";
-  const span = document.createElement("span");
-  span.className = "date-sep-label";
-  span.textContent = label;
-  sep.appendChild(span);
-  log.appendChild(sep);
+const pad = (n) => String(n).padStart(2, "0");
+function formatTime(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Copy the sheet's text and flash the whole of it — Ribbit's signal, and the one
-// the eye is already on, since the cursor is over the text it just took.
-async function copySheet(sheet, text) {
+// The ops and the edit count are the same walk, and the list re-renders on every
+// keystroke — so each entry works them out once and keeps them.
+function marksOf(e) {
+  if (e.marks) return e.marks;
+  const ops = e.corrected === null ? null : diffWords(e.original, e.corrected);
+  let count = 0;
+  if (ops) {
+    ops.forEach((op, i) => {
+      if (op.type === "same") return;
+      // A replacement is one edit, not two: count the removal and let its
+      // insertion ride along.
+      if (op.type === "ins" && ops[i - 1]?.type === "del") return;
+      count++;
+    });
+  }
+  e.marks = { ops, count };
+  return e.marks;
+}
+
+const editsLabel = (n) => (n === 1 ? "1 edit" : `${n} edits`);
+
+// --- Rendering ---------------------------------------------------------
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// The dictated text with the correction's marks in it: what was dropped struck
+// through, what was added underlined.
+function paintMarks(node, ops, original) {
+  if (!ops) { node.textContent = original; return; }
+  for (const op of ops) {
+    if (op.type === "same") { node.append(op.text); continue; }
+    const mark = el(op.type === "ins" ? "ins" : "del", null, op.text);
+    node.appendChild(mark);
+  }
+}
+
+function metaRow(e) {
+  const row = el("div", "meta");
+  row.appendChild(el("span", null, formatTime(e.ts)));
+  const add = (className, text) => {
+    row.appendChild(el("span", "sep", "·"));
+    row.appendChild(el("span", className, text));
+  };
+  if (e.state === "failed") add("failed", "failed");
+  else {
+    const { count } = marksOf(e);
+    add(null, count ? editsLabel(count) : "no edits");
+    if (showWas.has(e.id) && count) add(null, "was");
+  }
+  if (copiedId === e.id) add("copied", "copied");
+  return row;
+}
+
+function entryNode(e, index) {
+  const node = el("div", "entry");
+  node.dataset.i = String(index);
+  if (index === sel) node.classList.add("sel");
+
+  if (e.state === "working") {
+    node.append(el("div", "bar-a"), el("div", "bar-b"));
+    const meta = el("div", "meta");
+    meta.appendChild(el("span", null, formatTime(e.ts)));
+    meta.appendChild(el("span", "sep", "·"));
+    meta.appendChild(el("span", null, e.pending ? "correcting… will be copied" : "correcting…"));
+    node.appendChild(meta);
+    return node;
+  }
+
+  const text = el("div", "txt");
+  const { ops, count } = marksOf(e);
+  const was = showWas.has(e.id) && count > 0;
+  if (was) { node.classList.add("was"); paintMarks(text, ops, e.original); }
+  else text.textContent = e.state === "failed" ? e.original : e.corrected;
+  node.append(text, metaRow(e));
+  return node;
+}
+
+// Searched over both halves: you remember what you dictated as often as what
+// you sent.
+const hay = (e) => [e.corrected || "", e.original || ""];
+
+// Which entries the keys and the list are working on: everything, or just what
+// the field found.
+function visible() {
+  if (mode !== "search") return entries.map((_, i) => i);
+  const q = input.value.trim().toLowerCase();
+  return entries
+    .map((_, i) => i)
+    .filter((i) => hay(entries[i]).some((s) => s.toLowerCase().includes(q)));
+}
+
+function renderList() {
+  let day = null;
+  entries.forEach((e, i) => {
+    const label = formatDate(e.ts);
+    if (label !== day) { day = label; log.appendChild(el("div", "day", label)); }
+    log.appendChild(entryNode(e, i));
+  });
+}
+
+function renderSearch() {
+  const q = input.value.trim();
+  const hits = visible();
+  if (!hits.length) {
+    const blank = el("div", "blank");
+    blank.append("Nothing found. Press Enter and I'll correct what you typed.");
+    log.appendChild(blank);
+    return;
+  }
+  log.appendChild(el("div", "day", hits.length === 1 ? "1 result" : `${hits.length} results`));
+  for (const i of hits) {
+    const e = entries[i];
+    const from = hay(e).find((s) => s.toLowerCase().includes(q.toLowerCase())) || "";
+    const at = from.toLowerCase().indexOf(q.toLowerCase());
+    const node = el("div", "entry");
+    node.dataset.i = String(i);
+    if (i === sel) node.classList.add("sel");
+    const snip = el("div", "snip");
+    const inner = el("div", "snip-inner");
+    inner.append(from.slice(0, at));
+    inner.appendChild(el("mark", null, from.slice(at, at + q.length)));
+    inner.append(from.slice(at + q.length));
+    snip.appendChild(inner);
+    node.append(snip, metaRow(e));
+    log.appendChild(node);
+  }
+}
+
+// The hit's own line in the middle, one line above it and one below. Done after
+// the text is laid out, because that is the only moment its lines exist.
+function clampSnippets() {
+  for (const snip of log.querySelectorAll(".snip")) {
+    const inner = snip.firstElementChild;
+    const mark = inner.querySelector("mark");
+    if (!mark) continue;
+    const LINE = parseFloat(getComputedStyle(inner).lineHeight);
+    const total = Math.round(inner.scrollHeight / LINE);
+    if (total <= 3) continue;
+    const line = Math.round((mark.offsetTop - inner.offsetTop) / LINE);
+    const off = Math.min(Math.max(line - 1, 0), total - 3);
+    inner.style.marginTop = `${-off * LINE}px`;
+    if (off > 0) snip.classList.add("clip-top");
+    if (off + 3 < total) snip.classList.add("clip-bot");
+  }
+}
+
+// Nothing on the shelf yet: the two ways in, and nothing else.
+function renderBlank() {
+  const blank = el("div", "blank");
+  blank.append("Paste text here — Enter corrects it.");
+  blank.appendChild(el("br"));
+  blank.append("Or select it anywhere and press ");
+  blank.appendChild(el("kbd", null, hotkey));
+  blank.append(".");
+  log.appendChild(blank);
+}
+
+const KEY_HINTS = {
+  list: [["↑↓", "history"], ["←→", "was / now"], ["↵", "copy and close"], ["esc", "close"]],
+  search: [["↵", "correct"], ["↑↓", "results"], ["esc", "clear"]],
+  material: [["↵", "correct"], ["⇧↵", "new line"], ["esc", "clear"]],
+  // While the model reads, Enter is a promise: take whatever comes back.
+  working: [["↵", "take it and close"], ["esc", "stop"]],
+};
+
+function renderKeys() {
+  keyStrip.textContent = "";
+  const hints = working() ? KEY_HINTS.working
+    : mode === "list" && !entries.length ? [["esc", "close"]]
+      : KEY_HINTS[mode];
+  for (const [key, what] of hints) {
+    const span = el("span");
+    span.appendChild(el("b", null, key));
+    span.append(what);
+    keyStrip.appendChild(span);
+  }
+}
+
+// The field's shape is also the mode: a pill searches, a grown box holds
+// material. A pasted paragraph is not a query, and must not wipe the history
+// with "nothing found".
+function syncField() {
+  autoGrow();
+  const tall = input.scrollHeight > parseFloat(getComputedStyle(input).lineHeight) * 2;
+  fieldWrap.classList.toggle("hot", input.value.length > 0);
+  fieldWrap.classList.toggle("tall", tall);
+  mode = !input.value.trim() ? "list" : tall ? "material" : "search";
+}
+
+function render({ focus = false } = {}) {
+  syncField();
+  log.textContent = "";
+  if (mode === "search") renderSearch();
+  else if (entries.length) renderList();
+  else renderBlank();
+  clampSnippets();
+  renderKeys();
+
+  const current = log.querySelector(".entry.sel");
+  if (current) current.scrollIntoView({ block: "nearest" });
+  if (focus) focusField();
+}
+
+function focusField() {
+  input.focus();
+  input.selectionStart = input.selectionEnd = input.value.length;
+}
+
+function autoGrow() {
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+}
+
+// --- Doing things ------------------------------------------------------
+
+function move(step) {
+  const list = visible();
+  if (!list.length) return;
+  const at = Math.max(0, list.indexOf(sel));
+  sel = list[Math.min(list.length - 1, Math.max(0, at + step))];
+}
+
+// Copying is the window's whole point, so it also ends the window's job: the
+// text is in the clipboard and there is nothing left to look at.
+async function copySelected({ close = true } = {}) {
+  const e = entries[sel];
+  if (!e || e.state !== "done") return;
+  await copyEntry(e);
+  if (close) invoke("close_editor");
+}
+
+async function copyEntry(e) {
   try {
-    await invoke("copy_to_clipboard", { text });
-    sheet.classList.add("copied");
-    setTimeout(() => sheet.classList.remove("copied"), 700);
+    await invoke("copy_to_clipboard", { text: e.corrected });
+    copiedId = e.id;
+    render();
   } catch (err) {
     dlog(`copy failed: ${err}`);
   }
 }
 
-// The label above a block: what it is on the left, the edit count on the right.
-function slug(label, count = "") {
-  const row = document.createElement("div");
-  row.className = "slug";
-  const left = document.createElement("span");
-  left.textContent = label;
-  const right = document.createElement("span");
-  right.className = "edits";
-  right.textContent = count;
-  row.append(left, right);
-  return row;
-}
+// Send whatever is in the field. Its answer's place in the list is taken now,
+// selected, so the list doesn't move under the eye when the text lands.
+async function send() {
+  const text = input.value.trim();
+  input.value = "";
+  if (!text) return render({ focus: true });
+  const e = { id: ++uid, ts: new Date().toISOString(), original: text, corrected: null, state: "working" };
+  entries.unshift(e);
+  sel = 0;
+  render({ focus: true });
 
-const edits = (n) => `${n} ${n === 1 ? "edit" : "edits"}`;
-
-// Paint the transcript with the edits themselves: what Quill dropped is struck
-// through, what it typed in is in the ribbon's red. Returns how many edits were
-// marked. A text too long to diff (a pasted page) falls back to plain and
-// reports none — see MAX_TOKENS in diff.js.
-function renderDraft(el, original, corrected) {
-  el.textContent = "";
-  const ops = diffWords(original, corrected);
-  if (!ops) {
-    el.textContent = original;
-    return 0;
-  }
-  let marks = 0;
-  for (const op of ops) {
-    if (op.type === "same") {
-      el.append(op.text);
-      continue;
-    }
-    // A replacement is one edit, not two: count the removal and let its
-    // insertion ride along.
-    if (op.type !== "ins" || !el.lastElementChild || el.lastElementChild.tagName !== "DEL") marks++;
-    const mark = document.createElement(op.type === "ins" ? "ins" : "del");
-    mark.textContent = op.text;
-    el.appendChild(mark);
-  }
-  return marks;
-}
-
-// One correction on the desk: the transcript with its marks, and under it the
-// finished text on paper. Built empty (`corrected` null) while the model reads,
-// then finished in place by `settle` below — the transcript never jumps.
-function addEntry(original) {
-  clearEmptyDesk();
-  const entry = document.createElement("div");
-  entry.className = "entry";
-  const head = slug("transcript");
-  const draft = document.createElement("div");
-  draft.className = "draft";
-  draft.textContent = original;
-  const run = document.createElement("div");
-  run.className = "ribbon-run";
-  entry.append(head, draft, run);
-  log.appendChild(entry);
-  scrollToBottom();
-  return { entry, head, draft, run };
-}
-
-// The correction came back: mark the transcript, lay the clean sheet under it.
-function settle(parts, original, corrected) {
-  const { entry, head, draft, run } = parts;
-  run.remove();
-  const clean = corrected === original;
-  if (clean) {
-    entry.classList.add("entry--clean");
-    head.remove();
-    draft.remove();
-  } else {
-    const marks = renderDraft(draft, original, corrected);
-    head.querySelector(".edits").textContent = marks ? edits(marks) : "";
-  }
-
-  const sheet = document.createElement("div");
-  sheet.className = "sheet";
-  // The one thing the app exists to hand over: a control, not a paragraph that
-  // happens to listen for clicks.
-  sheet.tabIndex = 0;
-  sheet.setAttribute("role", "button");
-  sheet.setAttribute("aria-label", "Copy the corrected text");
-  sheet.append(slug(clean ? "already clean · click to copy" : "clean copy · click to copy"));
-  sheet.append(corrected);
-  // Copy the correction, never the markup — the struck-through words are the
-  // ones the user asked Quill to get rid of.
-  sheet.addEventListener("click", () => copySheet(sheet, corrected));
-  sheet.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    copySheet(sheet, corrected);
-  });
-  entry.appendChild(sheet);
-  scrollToBottom();
-}
-
-// Nothing on the desk yet: a blank sheet with the two ways in typed on it.
-// Rendered once at boot and cleared by the first thing that lands in the log —
-// an empty window that says nothing reads as a broken one.
-async function showEmptyDesk() {
-  if (log.querySelector(".entry, .note")) return;
-  let keys = "⌃⌥E";
-  try {
-    const s = await invoke("get_shortcut");
-    if (s) keys = prettyShortcut(s, navigator.platform.toLowerCase().includes("mac"));
-  } catch (_) {}
-  const blank = document.createElement("div");
-  blank.className = "blank";
-  blank.innerHTML =
-    `<div class="blank-sheet"><p>Paste text below — Enter corrects it.</p>` +
-    `<p>Or select it anywhere and press <kbd>${keys}</kbd>.</p></div>`;
-  log.appendChild(blank);
-}
-
-const clearEmptyDesk = () => log.querySelector(".blank")?.remove();
-
-// A note from the app itself — no key yet, no Accessibility, a failed call.
-// Nothing here is copyable, so it is not a sheet.
-function addNote(text, { error = false } = {}) {
-  clearEmptyDesk();
-  const note = document.createElement("div");
-  note.className = error ? "note note--error" : "note";
-  note.textContent = text;
-  log.appendChild(note);
-  scrollToBottom();
-  return note;
-}
-
-// Corrections in flight: id → its unfinished entry. While any are running, the
-// send button turns into a stop button. The correction is a single
-// non-streaming request, so "stop" means: drop the unfinished entry and ignore
-// whatever the call eventually returns, freeing the user to edit and resend.
-const inFlight = new Map();
-let correctionId = 0;
-
-function reflectGenerating() {
-  const busy = inFlight.size > 0;
-  composer.classList.toggle("generating", busy);
-  sendBtn.title = busy ? "Stop" : "Send (Enter)";
-  sendBtn.setAttribute("aria-label", busy ? "Stop" : "Send");
-}
-
-function stopGenerating() {
-  for (const parts of inFlight.values()) parts.entry.remove();
-  inFlight.clear();
-  reflectGenerating();
-  input.focus();
-}
-
-// Send `text` through correct→settle. Each call owns its own entry, so
-// concurrent corrections resolve into their own slots.
-async function runCorrection(text) {
-  const id = ++correctionId;
-  ensureDay();
-  const parts = addEntry(text);
-  inFlight.set(id, parts);
-  reflectGenerating();
   try {
     const corrected = await invoke("editor_correct", { text });
-    if (!inFlight.has(id)) return; // stopped while we were waiting → discard
-    settle(parts, text, corrected);
+    if (e.state === "stopped") return;
+    e.corrected = corrected;
+    e.state = "done";
+    // The promise given in advance: the window is already gone, the clipboard
+    // is the only thing left to answer.
+    if (e.pending) { e.pending = false; await copyEntry(e); }
+    else render();
   } catch (err) {
-    if (!inFlight.has(id)) return; // stopped while we were waiting → discard
-    parts.entry.remove();
-    addNote(String(err), { error: true });
-  } finally {
-    inFlight.delete(id);
-    reflectGenerating();
+    if (e.state === "stopped") return;
+    e.state = "failed";
+    e.error = String(err);
+    dlog(`correction failed: ${err}`);
+    render();
   }
 }
 
-async function loadHistory() {
-  try {
-    const entries = await invoke("get_log_history", { limit: 50 });
-    if (!entries || entries.length === 0) return;
-    // History comes newest-first; the desk reads oldest-at-top.
-    clearEmptyDesk();
-    for (const e of entries.slice().reverse()) {
-      const orig = e.original || "";
-      const corr = e.corrected || "";
-      ensureDay(e.ts);
-      settle(addEntry(orig), orig, corr);
-    }
-    scrollToBottom();
-  } catch (err) {
-    dlog(`loadHistory failed: ${err}`);
-  }
+// The correction is one non-streaming request, so stopping means: drop the
+// unfinished entry and ignore whatever comes back, freeing the text to be
+// edited and sent again.
+function stopWorking() {
+  const stopped = entries.filter((e) => e.state === "working");
+  for (const e of stopped) e.state = "stopped";
+  entries = entries.filter((e) => e.state !== "stopped");
+  sel = 0;
+  render({ focus: true });
 }
 
-// --- Composer ---
+// --- Views (one window, the bar stays, the body swaps) -----------------
 
-function autoGrow() {
-  input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 140) + "px";
-}
-
-function send() {
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = "";
-  autoGrow();
-  runCorrection(text);
-}
-
-$("#composer").addEventListener("submit", (e) => {
-  e.preventDefault();
-  // The same button is "send" at rest and "stop" while a correction runs.
-  if (inFlight.size > 0) stopGenerating();
-  else send();
-});
-input.addEventListener("input", autoGrow);
-input.addEventListener("keydown", (e) => {
-  // Enter sends; Shift+Enter is a newline.
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-});
-
-// The chrome's glyphs are drawn, not typed: one stroke weight across the gear,
-// the cross, the prompt and the arrows in the model stack (icons.js).
-setIcon(settingsBtn, "gear");
-setIcon($("#close"), "close");
-setIcon($("#debug-btn"), "prompt");
-setIcon($("#debug-close"), "close");
-setIcon($(".i-send"), "send", 16);
-
-// --- Views (Ribbit-style: one window, the titlebar stays, the body swaps) ---
-
-// "chat" | "settings" | "debug". The titlebar — and so the gear — is always
-// visible, so the gear toggles chat ↔ settings from either side.
 let currentView = "chat";
 function setView(name) {
   currentView = name;
   const chat = name === "chat";
   log.style.display = chat ? "" : "none";
-  composer.style.display = chat ? "" : "none";
+  fieldWrap.style.display = chat ? "" : "none";
+  panelTitle.style.display = chat ? "none" : "flex";
+  panelTitle.textContent = name === "settings" ? "Settings" : "Debug log";
   settingsPanel.style.display = name === "settings" ? "flex" : "none";
   debugPanel.style.display = name === "debug" ? "flex" : "none";
-  settingsBtn.classList.toggle("active", !chat); // gear shows it's "in settings"
+  settingsBtn.classList.toggle("active", !chat);
+  keyStrip.textContent = "";
+  if (!chat) {
+    const span = el("span");
+    span.appendChild(el("b", null, "esc"));
+    span.append(name === "debug" ? "back to settings" : "back");
+    keyStrip.appendChild(span);
+  }
   // The prompt box sizes itself to its text, and a hidden panel has no height to
   // measure — so it is measured here, the moment settings become visible.
   if (name === "settings") refitPrompt();
-  if (chat) { scrollToBottom(); input.focus(); }
+  if (chat) render({ focus: true });
 }
 
-// The gear flips between the chat and settings (from debug it returns to chat).
-settingsBtn.addEventListener("click", () => setView(currentView === "chat" ? "settings" : "chat"));
-$("#close").addEventListener("click", () => invoke("close_editor"));
+// --- Keys --------------------------------------------------------------
 
-// Debug log is reached from settings and steps back to it.
+// Flip the marks on the selected entry — left shows what was dictated, right
+// the finished text.
+function setWas(on) {
+  const current = entries[sel];
+  if (!current || current.state !== "done") return;
+  if (on) showWas.add(current.id);
+  else showWas.delete(current.id);
+  render();
+}
+
+// Agreed to in advance: the window goes now, the clipboard is filled when the
+// answer arrives.
+function takeInAdvance() {
+  entries.find((e) => e.state === "working").pending = true;
+  render();
+  invoke("close_editor");
+}
+
+const DO = {
+  back: () => setView(currentView === "debug" ? "settings" : "chat"),
+  send,
+  "copy-close": () => copySelected(),
+  "pending-close": takeInAdvance,
+  stop: stopWorking,
+  clear: () => { input.value = ""; render({ focus: true }); },
+  close: () => invoke("close_editor"),
+  prev: () => { move(-1); render(); },
+  next: () => { move(1); render(); },
+  was: () => setWas(true),
+  now: () => setWas(false),
+};
+
+function onKeyDown(e) {
+  const action = keyAction(e, {
+    view: currentView,
+    hasText: input.value.length > 0,
+    working: working(),
+    capturing: $("#shortcut-display")?.classList.contains("capturing"),
+  });
+  if (!action) return;
+  e.preventDefault();
+  DO[action]();
+}
+
+// --- Wiring ------------------------------------------------------------
+
+setIcon(settingsBtn, "gear", 22);
+setIcon($("#debug-btn"), "prompt");
+
+input.addEventListener("input", () => {
+  // A fresh query starts on the first thing it found — so the mode has to be
+  // settled before asking what is visible.
+  syncField();
+  const list = visible();
+  if (list.length && !list.includes(sel)) sel = list[0];
+  render();
+});
+
+window.addEventListener("keydown", onKeyDown);
+
+// A click does what Enter does minus the closing: the mouse is used while
+// looking at the list, and taking the window away mid-look is rude.
+log.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-i]");
+  if (!row) return;
+  sel = Number(row.dataset.i);
+  copySelected({ close: false });
+});
+
+settingsBtn.addEventListener("click", () => setView(currentView === "chat" ? "settings" : "chat"));
 $("#debug-btn").addEventListener("click", async () => {
   $("#debug-content").textContent = await invoke("get_debug_log");
   setView("debug");
 });
-$("#debug-close").addEventListener("click", () => setView("settings"));
 
-// Esc peels back one layer: debug → settings → chat → hide the window. While a
-// shortcut capture is live, settings.js owns Esc (cancels it), so we defer via
-// the `.capturing` class it sets on the kbd.
-window.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  if ($("#shortcut-display")?.classList.contains("capturing")) return;
-  e.preventDefault();
-  if (inFlight.size > 0) return stopGenerating(); // Esc stops generation first
-  if (currentView === "debug") return setView("settings");
-  if (currentView === "settings") return setView("chat");
-  invoke("close_editor");
-});
+// The window is shown by the tray and the hotkey, and it is typed into
+// immediately — so the field takes focus back every time the window comes up.
+window.addEventListener("focus", () => { if (currentView === "chat") focusField(); });
 
-// --- Events from Rust ---
+// --- Events from Rust --------------------------------------------------
 
-// Hotkey captured a selection (may be empty if nothing was selected / capture
-// failed): show it and correct it, or just focus the composer to type.
-//
-// The desk comes forward first. The window keeps whatever view it was left on,
-// and a hotkey answered by the settings panel looks like the hotkey did nothing
-// — the correction was running behind it all along.
+// The hotkey captured a selection: it lands in the field, ready to be corrected
+// with Enter — or edited first, which is the reason it isn't sent on its own.
 listen("editor:capture", (e) => {
   const text = (e.payload || "").trim();
   setView("chat");
-  if (text) runCorrection(text);
-  else { input.focus(); scrollToBottom(); }
+  if (text) input.value = text;
+  copiedId = null;
+  render({ focus: true });
 });
 
 // Hotkey fired without Accessibility — macOS already showed its dialog; we leave
-// one quiet inline note instead of a blocking overlay.
+// one quiet note instead of a blocking overlay.
 listen("editor:need-access", () => {
-  ensureDay();
-  addNote(
-    "I need Accessibility access to read the selected text. " +
-      "macOS already asked — enable Quill and press ⌃⌥E again (settings are behind ⚙)."
-  );
+  const note = el("div", "note note--error",
+    "I need Accessibility access to read the selected text. macOS already asked — " +
+    `enable Quill and press ${hotkey} again (settings are behind the gear).`);
+  log.prepend(note);
 });
 
 // An update waiting is announced on the menu-bar icon (green pen + an install
 // line in its menu). The window says nothing about it.
 
-// Bring up history + wire settings. On first run (no API key yet) land on the
-// settings view so the window the tray/hotkey reveals isn't a dead end — Rust
-// shows this window on a keyless launch.
-async function boot() {
-  await loadHistory();
-  showEmptyDesk();
+async function loadHistory() {
   try {
+    const rows = await invoke("get_log_history", { limit: 50 });
+    if (!rows) return;
+    // History arrives newest-first, which is the order it is read in.
+    entries = rows.map((r) => ({
+      id: ++uid,
+      ts: r.ts,
+      original: r.original || "",
+      corrected: r.corrected || "",
+      state: "done",
+    }));
+  } catch (err) {
+    dlog(`loadHistory failed: ${err}`);
+  }
+}
+
+async function boot() {
+  try {
+    const s = await invoke("get_shortcut");
+    if (s) hotkey = prettyShortcut(s, IS_MAC);
+  } catch (_) {}
+  await loadHistory();
+  render({ focus: true });
+  try {
+    // First run (no key yet): land on settings, so the window the tray reveals
+    // isn't a dead end.
     const cfg = await initSettings();
     if (cfg && !cfg.has_api_key) setView("settings");
   } catch (err) {
@@ -386,4 +529,4 @@ async function boot() {
 }
 
 boot();
-dlog("chat window ready");
+dlog("quill window ready");

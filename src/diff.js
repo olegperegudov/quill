@@ -26,6 +26,13 @@ function push(ops, type, text) {
   else ops.push({ type, text });
 }
 
+// Adjacent ops of one kind read as one mark.
+function merge(ops) {
+  const out = [];
+  for (const op of ops) push(out, op.type, op.text);
+  return out;
+}
+
 function lcsOps(a, b) {
   const n = a.length;
   const m = b.length;
@@ -44,18 +51,18 @@ function lcsOps(a, b) {
   let j = 0;
   while (i < n && j < m) {
     if (a[i] === b[j]) {
-      push(ops, "same", a[i]);
+      ops.push({ type: "same", text: a[i] });
       i++;
       j++;
     } else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) {
       // Deletions first on a tie, so a replaced word reads "old → new".
-      push(ops, "del", a[i++]);
+      ops.push({ type: "del", text: a[i++] });
     } else {
-      push(ops, "ins", b[j++]);
+      ops.push({ type: "ins", text: b[j++] });
     }
   }
-  while (i < n) push(ops, "del", a[i++]);
-  while (j < m) push(ops, "ins", b[j++]);
+  while (i < n) ops.push({ type: "del", text: a[i++] });
+  while (j < m) ops.push({ type: "ins", text: b[j++] });
   return ops;
 }
 
@@ -76,6 +83,42 @@ function dropCaseOnlyDeletions(ops) {
       continue;
     }
     out.push(del);
+  }
+  return out;
+}
+
+// A replaced run is marked twice over — the old text struck through, the new one
+// underlined next to it — and on dictated text that is nearly every word:
+// "отчетов" → "отчётов" reads as two whole words when one letter moved. Below
+// this many cells the pair is worth diffing again by character, which leaves the
+// letter that actually changed and nothing else.
+const REFINE_CELLS = 40_000;
+
+function refinePair(del, ins) {
+  const a = [...del];
+  const b = [...ins];
+  if (a.length * b.length > REFINE_CELLS) return null;
+  const ops = merge(lcsOps(a, b));
+  // One changed spot inside a word that is otherwise the same: a letter, an
+  // accent, a case. Anything looser — a swapped pair ("teh" → "the"), a
+  // different word that happens to share letters ("their" → "there") — is a
+  // word rewritten, and reads better whole than as a scatter of single letters.
+  const changed = ops.filter((op) => op.type !== "same");
+  if (!changed.length || changed.length === ops.length) return null;
+  const first = ops.indexOf(changed[0]);
+  const contiguous = changed.every((op, k) => ops[first + k] === op);
+  return contiguous ? ops : null;
+}
+
+function refineReplacements(ops) {
+  const out = [];
+  for (let i = 0; i < ops.length; i++) {
+    const del = ops[i];
+    const ins = ops[i + 1];
+    const finer = del.type === "del" && ins?.type === "ins" ? refinePair(del.text, ins.text) : null;
+    if (!finer) { out.push(del); continue; }
+    out.push(...finer);
+    i++;
   }
   return out;
 }
@@ -104,7 +147,7 @@ export function diffWords(before, after) {
 
   const ops = [];
   for (const t of a.slice(0, head)) push(ops, "same", t);
-  for (const op of dropCaseOnlyDeletions(lcsOps(midA, midB))) push(ops, op.type, op.text);
+  for (const op of refineReplacements(dropCaseOnlyDeletions(lcsOps(midA, midB)))) push(ops, op.type, op.text);
   for (const t of a.slice(a.length - tail)) push(ops, "same", t);
   return ops;
 }

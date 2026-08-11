@@ -26,17 +26,23 @@ Each button downloads the latest installer for that platform. Want an older buil
 
 Then:
 
-1. **Open it.** Apple isn't paid to trust us, so the first launch claims the app is *"damaged"*. It isn't — run `xattr -cr /Applications/Quill.app` once in Terminal, then open it normally. Updates after that install themselves. You'll also be asked for **Accessibility**, once: that's how Quill reads what you selected.
+1. **Open it.** macOS blocks the first launch, says it cannot verify the app and offers the Trash. The file is fine — Apple vouches only for developers who pay it $99 a year, and this app is free. Press **Done**, then **System Settings → Privacy & Security**, scroll to *Security*, press **Open Anyway**. Once per app, not per version: updates after that install themselves. You'll also be asked for **Accessibility**, once: that's how Quill reads what you selected.
 2. **Paste a key.** Any OpenAI-compatible model will do — [Groq](https://console.groq.com/keys) (the default, and fast), [RouterAI](https://routerai.ru), [OpenAI](https://platform.openai.com/api-keys), [OpenRouter](https://openrouter.ai/keys). A correction is a tiny request; this costs pennies.
-3. **Select text anywhere, press ⌃⌥E.** The fixed version comes back in a small chat at your cursor — click it to copy. On Windows: `Ctrl+Alt+E`.
+3. **Select text anywhere, press ⌃⌥E.** The window drops out under the pen with your text already in it: Enter corrects it, Enter again copies the result and closes the window. On Windows: `Ctrl+Alt+E`.
 
 Quill is built and used on macOS. The Windows build exists and installs, but it isn't tested nearly as much — expect rough edges.
 
 ## Fixes the mistakes, keeps your voice
 
-Tone, register and word choices survive — only the errors go. The reply shows what changed: added words underlined, removed ones struck through. Nothing wrong with the text? Quill says so and leaves it alone. Every correction stays in a small chat; click any bubble to copy it.
+Tone, register and word choices survive — only the errors go. What you get is the finished text, nothing beside it; press ← and the same paragraph shows what changed — added letters underlined, removed ones struck through — and → puts it back. Nothing wrong with the text? Quill says so and leaves it alone.
 
-![The chat with two corrections](docs/screenshots/chat.png)
+![The history, and one correction showing its edits](docs/screenshots/chat.png)
+
+## Two presses, no mouse
+
+Paste (or arrive by hotkey), Enter, Enter — corrected, copied, gone. The second press can be given before the answer exists: the window closes at once and the correction lands in the clipboard by itself a couple of seconds later. ↑↓ walk the history, a word typed into the same field searches it, and the bottom edge always says what the keys do.
+
+![The window while a correction is running](docs/screenshots/keys.png)
 
 ## Never wait on one model
 

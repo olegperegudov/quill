@@ -39,11 +39,17 @@ reader — on a dictated page nobody does that comparison.
 ## Operating Context
 
 - Lives in the macOS menu bar / Windows tray, no Dock icon, running all day.
-- Two ways in: the hotkey (⌃⌥E) over a selection anywhere in the OS, and the
-  window itself, where text is pasted and sent with Enter.
+- Two ways in, and both end in the same field at the top of the window: text
+  pasted into it, or a selection anywhere in the OS picked up by the hotkey
+  (⌃⌥E) and dropped into it. Neither sends on its own — the text can be edited
+  first, and Enter starts the correction.
 - **The window is the primary path** (confirmed 2026-08-10). The typical unit of
-  work is a dictated paragraph or several, pasted in, corrected, then copied out
-  by clicking it and pasted where it was going.
+  work is a dictated paragraph or several, corrected, then copied out and pasted
+  where it was going.
+- **Two presses cover the whole job** (confirmed 2026-08-11): Enter corrects,
+  Enter copies the result and closes the window. The second may be given before
+  the answer exists — the window goes at once and the correction reaches the
+  clipboard by itself.
 - Typical input length: from one sentence to several paragraphs of transcript.
 - History of past corrections is kept and reloaded into the window.
 - Model calls go to an ordered stack of providers; if the top one rate-limits or
@@ -58,18 +64,20 @@ reader — on a dictated page nobody does that comparison.
   images or network calls from the frontend. Anything the design needs must ship
   inside the app.
 - The frontend never touches the network or the API key — Rust does.
-- The word-level diff is computed in the frontend; past ~1500 changed tokens it
-  gives up and renders plain text rather than hanging the window.
+- The diff is computed in the frontend, word by word and then letter by letter
+  inside a replaced word; past ~1500 changed tokens it gives up and renders plain
+  text rather than hanging the window.
 - Copying must copy the correction, never the diff markup.
 - The selected text is untrusted content; the system prompt forbids the model
   from following instructions found inside it. Not to be weakened.
 - Window closes to the tray; the app must survive with zero windows open.
 - Verified only through the released build (in-app updater), not local builds.
 
-**Confirmed for the redesign (2026-08-10):** the reply is split in two — the
-edits, and the clean final text below it; a click on the clean text copies it and
-the whole text flashes, the way Ribbit's log lines do; the window becomes
-resizable with a larger default, remembering size and position.
+**Confirmed for the redesign (2026-08-11):** the window is driven from the
+keyboard. The finished text is what is on screen; the edits that made it are one
+arrow key away. The field at the top searches the history while it holds a word
+and corrects what is in it on Enter. A click still copies an entry, and leaves
+the window open — the mouse is used while looking.
 
 ## Brand Commitments
 

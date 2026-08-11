@@ -65,3 +65,32 @@ describe("diffWords", () => {
     expect(diffWords(before, after)).toBeNull();
   });
 });
+
+// Dictation is corrected mostly inside the words — an accent, a letter, a case.
+// Marking those whole ("отчетов" struck, "отчётов" typed in next to it) puts a
+// near-copy of the paragraph on screen and makes the reader find the letter.
+describe("diffWords — a letter inside a word", () => {
+  it("marks only the letter that changed", () => {
+    const ops = diffWords("там еще не готова выгрузка", "там ещё не готова выгрузка");
+    expect(marked(ops, "del")).toEqual(["е"]);
+    expect(marked(ops, "ins")).toEqual(["ё"]);
+    expect(join(ops, "same", "ins")).toBe("там ещё не готова выгрузка");
+  });
+
+  it("still rebuilds the correction when the word grows an accent", () => {
+    const ops = diffWords("без раздела отчетов", "без раздела отчётов");
+    expect(join(ops, "same", "ins")).toBe("без раздела отчётов");
+    expect(marked(ops, "del")).toEqual(["е"]);
+  });
+
+  it("leaves a rewritten word whole — a swap is not a letter correction", () => {
+    expect(marked(diffWords("teh end", "the end"), "del")).toEqual(["teh"]);
+    expect(marked(diffWords("their is", "there is"), "del")).toEqual(["their"]);
+  });
+
+  it("drops the struck half when a sentence just gains its capital and comma", () => {
+    const ops = diffWords("слушай в общем", "Слушай, в общем");
+    expect(marked(ops, "del")).toEqual([]);
+    expect(join(ops, "same", "ins")).toBe("Слушай, в общем");
+  });
+});
