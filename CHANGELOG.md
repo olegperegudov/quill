@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.52 — 2026-08-11
+
 - An update is now offered only after that exact build has been installed and
   started on a clean machine.
     - Every push-built release is published as a prerelease and promoted to
