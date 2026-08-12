@@ -33,6 +33,13 @@ pub fn init() {
 }
 
 pub fn log(msg: &str) {
+    // Tests walk code paths that log, and the fallback below would put those
+    // lines in the installed app's own log — several threads at once, shredding
+    // the one witness a live session has. Cost a confusing read of a real log
+    // while diagnosing a failed update.
+    if cfg!(test) {
+        return;
+    }
     let path = match LOG_PATH.lock() {
         Ok(g) => g.clone(),
         Err(_) => return,

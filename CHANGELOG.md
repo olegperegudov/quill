@@ -9,6 +9,21 @@ stay here, out of the release.
 
 ## Unreleased
 
+- A dropped connection no longer eats the click: the update is retried, and if
+  it still cannot get through, the menu says so instead of doing nothing.
+    - One click used to cost two round-trips — a check, then a second check
+      inside the install — and either could lose. It is one now, carrying the
+      update straight into the download, retried three times two seconds apart.
+      `retry_pause` holds the policy so a slide back to a single attempt fails
+      a test. Found live: the route to GitHub here runs through a tunnel that
+      resolves it to an address only reachable inside that tunnel, so a request
+      issued while the tunnel is re-establishing times out with no answer.
+- Running the test suite no longer writes into the installed app's own log.
+    - `debug_log::log` falls back to the real file when `init` has not run,
+      which in a unit test meant several threads appending interleaved lines to
+      the log of the app the user is actually running — read while diagnosing a
+      failed update, they look like the app misbehaving.
+
 ## v0.1.54 — 2026-08-12
 
 - A failed correction says what went wrong — "RouterAI is out of credit",

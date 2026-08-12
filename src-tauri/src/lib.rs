@@ -32,13 +32,14 @@ mod selection;
 mod tcc_reset;
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{
     AppHandle, Emitter, Manager,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
-use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// Menu-bar icon tinted green while an update is waiting — the same signal
 /// Ribbit and CopyPaster give, so the three apps behave alike.
@@ -335,44 +336,60 @@ fn get_debug_log() -> String {
     }
 }
 
+/// A dropped connection is normal here, not exceptional: the route to GitHub
+/// can go through a tunnel, and a request issued while it re-establishes dies
+/// on the spot. One attempt per click made that look like a broken updater.
+const UPDATE_ATTEMPTS: u32 = 3;
+const UPDATE_RETRY_PAUSE: Duration = Duration::from_secs(2);
+
+/// How long a failure notice sits in the menu before the item goes back to
+/// offering the update.
+const UPDATE_NOTICE: Duration = Duration::from_secs(5);
+
+/// Asks GitHub what the latest release is, retrying a transport failure. The
+/// answer carries the update itself, so a caller that wants to install it does
+/// not have to ask a second time — the click used to pay for two round-trips
+/// and could lose on either.
+async fn fetch_update(app: &AppHandle) -> Result<Option<Update>, String> {
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let mut last = String::new();
+    for attempt in 1..=UPDATE_ATTEMPTS {
+        match updater.check().await {
+            Ok(found) => return Ok(found),
+            Err(e) => {
+                last = e.to_string();
+                debug_log::log(&format!("update: check attempt {}/{} failed: {}", attempt, UPDATE_ATTEMPTS, last));
+                match retry_pause(attempt) {
+                    Some(pause) => tokio::time::sleep(pause).await,
+                    None => break,
+                }
+            }
+        }
+    }
+    Err(last)
+}
+
+/// How long to wait before attempt `attempt + 1`, or `None` when the attempts
+/// are spent. Split out from the network call so the policy itself is testable:
+/// the bug being fixed was a single attempt, and nothing would have caught a
+/// silent slide back to it.
+fn retry_pause(attempt: u32) -> Option<Duration> {
+    (attempt < UPDATE_ATTEMPTS).then_some(UPDATE_RETRY_PAUSE)
+}
+
 /// Looks for a release and, if one is there, lights the tray. Not a command any
 /// more: updating lives in the menu-bar menu, so the window never asks for it.
 async fn check_for_update(app: &AppHandle) -> Result<Option<String>, String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    match updater.check().await {
-        Ok(Some(update)) => {
-            let version = update.version.clone();
-            debug_log::log(&format!("update: v{} available", version));
-            announce_update(app, &version);
-            Ok(Some(version))
+    match fetch_update(app).await? {
+        Some(update) => {
+            debug_log::log(&format!("update: v{} available", update.version));
+            announce_update(app, &update.version);
+            Ok(Some(update.version.clone()))
         }
-        Ok(None) => {
+        None => {
             debug_log::log("update: up to date");
             Ok(None)
         }
-        Err(e) => {
-            debug_log::log(&format!("update: check failed: {}", e));
-            Err(e.to_string())
-        }
-    }
-}
-
-async fn install_update(app: &AppHandle) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    match updater.check().await {
-        Ok(Some(update)) => {
-            debug_log::log(&format!("update: downloading v{}", update.version));
-            update
-                .download_and_install(|_, _| {}, || debug_log::log("update: downloaded, restarting"))
-                .await
-                .map_err(|e| {
-                    debug_log::log(&format!("update: install failed: {}", e));
-                    e.to_string()
-                })?;
-            app.restart();
-        }
-        Ok(None) => Err("No update available".into()),
-        Err(e) => Err(e.to_string()),
     }
 }
 
@@ -394,13 +411,43 @@ fn announce_update(app: &AppHandle, version: &str) {
 /// version has been found. Two items would leave a dead "Check" sitting next to
 /// a live "Update".
 async fn on_update_clicked(app: AppHandle) {
-    match check_for_update(&app).await {
-        Ok(Some(_)) => {
-            let _ = install_update(&app).await;
+    match fetch_update(&app).await {
+        Ok(Some(update)) => {
+            let version = update.version.clone();
+            announce_update(&app, &version);
+            debug_log::log(&format!("update: downloading v{}", version));
+            match update
+                .download_and_install(|_, _| {}, || debug_log::log("update: downloaded, restarting"))
+                .await
+            {
+                Ok(()) => app.restart(),
+                Err(e) => {
+                    debug_log::log(&format!("update: install failed: {}", e));
+                    say_and_restore(&app, "Download failed — try again").await;
+                }
+            }
         }
-        Ok(None) => debug_log::log("update: nothing to install"),
-        Err(e) => debug_log::log(&format!("update: check failed: {}", e)),
+        Ok(None) => {
+            debug_log::log("update: nothing to install");
+            say_and_restore(&app, "Quill is up to date").await;
+        }
+        Err(e) => {
+            debug_log::log(&format!("update: check failed: {}", e));
+            say_and_restore(&app, "No connection — try again").await;
+        }
     }
+}
+
+/// The menu item is where the click landed, so it is where the answer belongs:
+/// a tray app has no window to put a message in, and silence after a click
+/// reads as a broken updater. The item says what happened, then goes back to
+/// whatever it was offering.
+async fn say_and_restore(app: &AppHandle, notice: &str) {
+    let Some(item) = app.try_state::<UpdateItem>() else { return };
+    let Ok(before) = item.0.text() else { return };
+    let _ = item.0.set_text(notice);
+    tokio::time::sleep(UPDATE_NOTICE).await;
+    let _ = item.0.set_text(before);
 }
 
 #[tauri::command]
@@ -1082,6 +1129,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One attempt per click is what made the updater look broken: the tunnel
+    /// this machine reaches GitHub through drops the odd connection, and the
+    /// click died on it with nothing to show for itself.
+    #[test]
+    fn a_dropped_connection_gets_another_go() {
+        assert!(UPDATE_ATTEMPTS > 1, "a single attempt is the bug, not the policy");
+        for attempt in 1..UPDATE_ATTEMPTS {
+            assert_eq!(retry_pause(attempt), Some(UPDATE_RETRY_PAUSE), "attempt {} must retry", attempt);
+        }
+        assert_eq!(retry_pause(UPDATE_ATTEMPTS), None, "the last attempt is the last");
+    }
 
     /// The update signal is the icon itself — ship the plain pen by mistake and
     /// the user never learns an update is waiting, silently and forever.
