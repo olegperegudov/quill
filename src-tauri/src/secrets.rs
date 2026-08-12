@@ -29,10 +29,14 @@ fn read_file() -> String {
 
 /// Value stored for `env_var` in the .env file, if any.
 fn from_file(env_var: &str) -> Option<String> {
+    value_in(&read_file(), env_var)
+}
+
+/// The file half of the lookup, split out so it can be tested without touching
+/// the real config directory.
+fn value_in(body: &str, env_var: &str) -> Option<String> {
     let prefix = format!("{}=", env_var);
-    read_file()
-        .lines()
-        .find_map(|l| l.strip_prefix(&prefix).map(str::to_string))
+    body.lines().find_map(|l| l.strip_prefix(&prefix).map(str::to_string))
 }
 
 /// Pull the stored keys for the given slots into the process environment, so the
@@ -73,12 +77,24 @@ pub fn save(env_var: &str, key: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The key to use for this slot: the process env first (startup load and dev
+/// overrides land there), the config file behind it.
+///
+/// Every reader goes through here, including the provider stack at request
+/// time. Reading the file only at startup used to mean a key added afterwards —
+/// by hand, or by another window — was reported as present by the settings
+/// screen while the stack still skipped that provider as keyless until the app
+/// was restarted.
+pub fn key_for(env_var: &str) -> String {
+    match std::env::var(env_var) {
+        Ok(k) if !k.is_empty() => k,
+        _ => from_file(env_var).unwrap_or_default(),
+    }
+}
+
 /// Whether a usable key for this env var is present (process env or file).
 pub fn has_key(env_var: &str) -> bool {
-    if std::env::var(env_var).map(|k| !k.is_empty()).unwrap_or(false) {
-        return true;
-    }
-    from_file(env_var).map(|k| !k.is_empty()).unwrap_or(false)
+    !key_for(env_var).is_empty()
 }
 
 /// Write the file owner-only (0600) so the token isn't readable by other users.
@@ -87,4 +103,31 @@ pub fn has_key(env_var: &str) -> bool {
 /// still world-readable.
 fn write_private(path: &Path, body: &str) -> Result<(), String> {
     crate::private::write(path, body.as_bytes()).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn value_in_reads_only_its_own_slot() {
+        let body = "ROUTERAI_API_KEY=rk-1\nGROQ_API_KEY=gk-2\n";
+        assert_eq!(value_in(body, "GROQ_API_KEY").unwrap(), "gk-2");
+        assert_eq!(value_in(body, "ROUTERAI_API_KEY").unwrap(), "rk-1");
+        assert!(value_in(body, "OPENAI_API_KEY").is_none());
+        // A slot whose name merely ends the same must not match.
+        assert!(value_in(body, "API_KEY").is_none());
+    }
+
+    #[test]
+    fn env_wins_over_the_file() {
+        unsafe { std::env::set_var("QS_T1_KEY", "from-env") };
+        assert_eq!(key_for("QS_T1_KEY"), "from-env");
+    }
+
+    #[test]
+    fn an_empty_env_slot_is_no_key() {
+        unsafe { std::env::set_var("QS_T2_KEY", "") };
+        assert!(!has_key("QS_T2_KEY"));
+    }
 }

@@ -9,6 +9,26 @@ stay here, out of the release.
 
 ## Unreleased
 
+- A failed correction says what went wrong — "RouterAI is out of credit",
+  "Groq timed out" — instead of the bare word "failed".
+    - The provider's own wording is verbose, differs per vendor and echoes the
+      request back; it stays in the debug log while `fallback::explain` turns
+      the status into one short line naming the provider and what it did.
+      Pinned by a test that also asserts the raw body never reaches the window.
+- A provider that has run out of money hands the work to the backup instead of
+  failing the correction.
+    - HTTP 402 was classified as a hard error, on the reasoning that 4xx means
+      a broken setup worth surfacing. It does not here: the key, url and model
+      are all still valid, the account is simply empty — which is the exact
+      case a backup entry exists for. It now switches like a rate limit.
+- A key added while the app is running is used right away, without a restart.
+    - The stack read keys from the process env, filled once at startup, while
+      the settings screen read the config file — so a key written afterwards
+      showed as present and was skipped as missing at the same time. Both now
+      go through `secrets::key_for` (env first, file behind it), which is what
+      `has_key` is defined as. Found live: a working backup key sat in the file
+      for a day while corrections failed against an empty primary account.
+
 ## v0.1.53 — 2026-08-11
 
 - Filler words go out with the corrections: "ну", "вот", "как бы", "типа",

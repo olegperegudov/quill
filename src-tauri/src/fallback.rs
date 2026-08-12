@@ -3,12 +3,13 @@
 //! Where it sits: the stack is an ordered list of provider entries in
 //! `config.json` (`providers`). Entry `[0]` is the primary, the rest are
 //! fallbacks tried in order. A request that fails with a *transient* signal —
-//! HTTP 429 (rate limit / quota), 5xx (provider down) or a network timeout —
-//! counts toward a consecutive-failure tally; once it reaches the configured
-//! threshold the active pointer advances to the next entry and stays there for
-//! a cooldown window, after which it snaps back to the primary. A *hard* client
-//! error (400/401/403/404 — bad key/url/model) never advances: that is a config
-//! bug to surface, not something to mask behind a backup.
+//! HTTP 429 (rate limit / quota), 402 (account out of credit), 5xx (provider
+//! down) or a network timeout — counts toward a consecutive-failure tally; once
+//! it reaches the configured threshold the active pointer advances to the next
+//! entry and stays there for a cooldown window, after which it snaps back to
+//! the primary. A *hard* client error (400/401/403/404 — bad key/url/model)
+//! never advances: that is a config bug to surface, not something to mask
+//! behind a backup.
 //!
 //! Ported from Ribbit, which runs the same machine over two stacks (speech +
 //! text); Quill has a single stack, so the Stack selector is gone and the state
@@ -46,8 +47,8 @@ pub struct ProviderEntry {
 /// How the caller should react to a failed request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailKind {
-    /// Transient (429 / 5xx / timeout / transport) — counts toward the switch
-    /// threshold and moves the walk on to the next entry.
+    /// Transient (402 / 429 / 5xx / timeout / transport) — counts toward the
+    /// switch threshold and moves the walk on to the next entry.
     Switch,
     /// Hard client error (400/401/403/404, or content rejected) — surface it,
     /// never switch.
@@ -87,7 +88,10 @@ pub fn classify(status: Option<u16>, is_timeout: bool) -> FailKind {
         return FailKind::Switch;
     }
     match status {
-        Some(429) => FailKind::Switch,
+        // 402 is the provider saying "your balance ran out", not "your setup is
+        // wrong": the key, url and model are all still valid. That is precisely
+        // what a backup entry is for, so it switches like a rate limit does.
+        Some(402) | Some(429) => FailKind::Switch,
         Some(s) if (500..600).contains(&s) => FailKind::Switch,
         Some(_) => FailKind::Hard, // 400/401/403/404/200-rejected — config/auth/content bug
         None => FailKind::Switch,  // transport error — primary unreachable
@@ -193,7 +197,7 @@ fn run_with_failover_on<T>(
     let mut last_err: Option<String> = None;
     for (i, entry) in entries.iter().enumerate().skip(start) {
         let name = if entry.label.is_empty() { entry.url.as_str() } else { entry.label.as_str() };
-        let key = std::env::var(&entry.key_env).unwrap_or_default();
+        let key = crate::secrets::key_for(&entry.key_env);
         if key.is_empty() {
             crate::debug_log::log(&format!("stack: '{}' has no key, skipping", name));
             continue;
@@ -214,19 +218,41 @@ fn run_with_failover_on<T>(
                         "stack: transient fail on '{}' ({}); trying next entry",
                         name, e.message
                     ));
-                    last_err = Some(e.message);
+                    last_err = Some(explain(name, &e));
                 }
                 FailKind::Hard => {
                     crate::debug_log::log(&format!(
                         "stack: hard fail on '{}': {} (surfacing, no failover)",
                         name, e.message
                     ));
-                    return Err(e.message);
+                    return Err(explain(name, &e));
                 }
             },
         }
     }
     Err(last_err.unwrap_or_else(|| "No API key set — open Quill settings.".to_string()))
+}
+
+/// What the person waiting on the correction gets told. The provider's own
+/// wording is verbose, inconsistent between vendors and often carries the
+/// request body back — useful in the debug log, unreadable in a one-line meta
+/// row. So the raw text stays in the log and the window gets this: which
+/// provider, and what it did.
+fn explain(provider: &str, e: &CallError) -> String {
+    if e.is_timeout {
+        return format!("{} timed out", provider);
+    }
+    match e.status {
+        Some(400) => format!("{} refused the request", provider),
+        Some(401) | Some(403) => format!("{} rejected the key", provider),
+        Some(402) => format!("{} is out of credit", provider),
+        Some(404) => format!("{} has no such endpoint or model", provider),
+        Some(429) => format!("{} is rate-limiting", provider),
+        Some(200) => format!("{} sent nothing usable", provider),
+        Some(s) if (500..600).contains(&s) => format!("{} is down", provider),
+        Some(s) => format!("{} failed ({})", provider, s),
+        None => format!("{} is unreachable", provider),
+    }
 }
 
 // --- config readers -------------------------------------------------------
@@ -255,7 +281,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn explain_names_the_provider_and_what_it_did() {
+        let http = |s| CallError::http(s, "http 402: {\"error\":\"Insufficient balance\"}".into());
+        assert_eq!(explain("RouterAI", &http(402)), "RouterAI is out of credit");
+        assert_eq!(explain("RouterAI", &http(401)), "RouterAI rejected the key");
+        assert_eq!(explain("Groq", &http(503)), "Groq is down");
+        assert_eq!(explain("Groq", &CallError::transport(true, "timeout".into())), "Groq timed out");
+        assert_eq!(explain("Groq", &CallError::transport(false, "dns".into())), "Groq is unreachable");
+        assert_eq!(explain("Groq", &CallError::rejected("empty".into())), "Groq sent nothing usable");
+        // The provider's own wording never reaches the window.
+        assert!(!explain("RouterAI", &http(402)).contains("Insufficient balance"));
+    }
+
+    #[test]
     fn classify_transient_switches() {
+        assert_eq!(classify(Some(402), false), FailKind::Switch); // out of credit
         assert_eq!(classify(Some(429), false), FailKind::Switch);
         assert_eq!(classify(Some(500), false), FailKind::Switch);
         assert_eq!(classify(Some(503), false), FailKind::Switch);
@@ -409,7 +449,7 @@ mod tests {
             calls.set(calls.get() + 1);
             Err::<String, _>(CallError::http(401, "bad key".into()))
         });
-        assert_eq!(out.unwrap_err(), "bad key");
+        assert_eq!(out.unwrap_err(), "a rejected the key");
         assert_eq!(calls.get(), 1, "hard error must not try further entries");
         assert_eq!(st.lock().unwrap().consec_fail, 0, "hard errors never feed the switch tally");
     }
@@ -440,7 +480,8 @@ mod tests {
         let out = run_with_failover_on(&st, &entries, 0, 5, |_, _| {
             Err::<String, _>(CallError::transport(true, "timeout".into()))
         });
-        assert_eq!(out.unwrap_err(), "timeout");
+        // The last entry tried is the one named to the user.
+        assert_eq!(out.unwrap_err(), "b timed out");
         // Both entries failed, but only the starting one counts.
         assert_eq!(st.lock().unwrap().consec_fail, 1);
     }

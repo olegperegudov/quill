@@ -125,7 +125,9 @@ function metaRow(e) {
     row.appendChild(el("span", "sep", "·"));
     row.appendChild(el("span", className, text));
   };
-  if (e.state === "failed") add("failed", "failed");
+  // The reason, not just the fact: "failed" alone sends you to the debug log to
+  // find out that a provider ran out of credit.
+  if (e.state === "failed") add("failed", e.error || "failed");
   else {
     const { count } = marksOf(e);
     add(null, count ? editsLabel(count) : "no edits");
