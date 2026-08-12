@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.55 — 2026-08-12
+
 - A dropped connection no longer eats the click: the update is retried, and if
   it still cannot get through, the menu says so instead of doing nothing.
     - One click used to cost two round-trips — a check, then a second check
