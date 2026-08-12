@@ -9,6 +9,31 @@ stay here, out of the release.
 
 ## Unreleased
 
+- Clicking the update twice in a row no longer jams the menu item on a message,
+  and no longer starts a second download alongside the first.
+    - Review findings on the notice added in v0.1.55. The notice restored the
+      text it had replaced, so a second click inside those five seconds
+      memorised the *first notice* and left the item on it for the rest of the
+      session — and a release found by the background poll meanwhile was
+      overwritten by the stale text, with the poll already stopped. The item's
+      resting text is now derived from what it can offer (`idle_label`, tested)
+      rather than remembered, and a download in flight owns the click.
+- A refused update says "Update check failed" rather than blaming the
+  connection, and is not retried three times for nothing.
+    - A malformed or unsigned release feed answers the same way however often
+      it is asked; only a transport failure earns the retries and the words
+      "try again".
+- A provider named by its endpoint no longer pushes the failure line past the
+  window edge.
+    - Wrapping cannot break a url, which is one token: `.meta .failed` needed
+      `min-width: 0; overflow-wrap: anywhere`, as `.txt` already had. Shot with
+      `FAIL_WITH=… SHOT=failed _quill_shot.mjs`.
+- Unit tests no longer read the installed app's key file.
+    - `key_for` falls through to the config file, so tests reaching it through
+      the provider stack picked up whichever keys the machine happened to have.
+      Same guard as `debug_log`, and the module header no longer describes the
+      startup-only contract the fix removed.
+
 ## v0.1.55 — 2026-08-12
 
 - A dropped connection no longer eats the click: the update is retried, and if

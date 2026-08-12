@@ -249,7 +249,10 @@ body {
 }
 .meta .sep { color: #383d45; }
 .meta .copied { color: var(--ok); }
-.meta .failed { color: var(--err); }
+/* A provider with no label is named by its endpoint, and a url is one
+   unbreakable token — it would push the row past the window edge, which is what
+   the wrap above exists to prevent. */
+.meta .failed { color: var(--err); min-width: 0; overflow-wrap: anywhere; }
 
 /* Working: the answer's place is taken the moment you press Enter, so the list
    doesn't jump under the eye when it arrives. */

@@ -31,6 +31,7 @@ mod secrets;
 mod selection;
 mod tcc_reset;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{
@@ -45,10 +46,39 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 /// Ribbit and CopyPaster give, so the three apps behave alike.
 const TRAY_UPDATE_ICON: &[u8] = include_bytes!("../icons/tray-update.png");
 
-/// The tray's update item, kept reachable so `announce_update` can rewrite it.
-/// A newtype because Tauri keys managed state by type: a bare `MenuItem<Wry>`
-/// would be ambiguous the moment a second item wants to be managed too.
-struct UpdateItem(tauri::menu::MenuItem<tauri::Wry>);
+/// What the tray's update item says when it is idle: the offer once a release
+/// has been found, the invitation to look before that.
+const CHECK_LABEL: &str = "Check for updates";
+
+/// The tray's update item and the state that decides its text. Managed by Tauri,
+/// which keys state by type — hence a named struct rather than a bare
+/// `MenuItem<Wry>`, which would be ambiguous the moment a second item wants
+/// managing too.
+struct UpdateItem {
+    item: tauri::menu::MenuItem<tauri::Wry>,
+    /// The version waiting to be installed, once a check has found one.
+    found: Mutex<Option<String>>,
+    /// A download already in flight. Without it a second click starts a second
+    /// install against the same target and both race to restart the app.
+    busy: AtomicBool,
+}
+
+impl UpdateItem {
+    fn label(&self) -> String {
+        idle_label(self.found.lock().ok().and_then(|found| found.clone()).as_deref())
+    }
+}
+
+/// The item's resting text, derived rather than remembered: a notice that
+/// restored the text it replaced would memorise *another notice* when two clicks
+/// landed inside the same five seconds, leaving the item stuck on it until the
+/// app restarted.
+fn idle_label(found: Option<&str>) -> String {
+    match found {
+        Some(version) => format!("Update to v{}", version),
+        None => CHECK_LABEL.to_string(),
+    }
+}
 
 const BUNDLE_ID: &str = "com.quill.app";
 const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
@@ -350,15 +380,23 @@ const UPDATE_NOTICE: Duration = Duration::from_secs(5);
 /// answer carries the update itself, so a caller that wants to install it does
 /// not have to ask a second time — the click used to pay for two round-trips
 /// and could lose on either.
-async fn fetch_update(app: &AppHandle) -> Result<Option<Update>, String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let mut last = String::new();
+async fn fetch_update(app: &AppHandle) -> Result<Option<Update>, CheckFailure> {
+    let updater = app.updater().map_err(|e| CheckFailure::other(e.to_string()))?;
+    let mut last = CheckFailure::other(String::new());
     for attempt in 1..=UPDATE_ATTEMPTS {
         match updater.check().await {
             Ok(found) => return Ok(found),
             Err(e) => {
-                last = e.to_string();
-                debug_log::log(&format!("update: check attempt {}/{} failed: {}", attempt, UPDATE_ATTEMPTS, last));
+                last = CheckFailure::from_updater(&e);
+                debug_log::log(&format!(
+                    "update: check attempt {}/{} failed: {}",
+                    attempt, UPDATE_ATTEMPTS, last.message
+                ));
+                // A signature or manifest problem answers the same way however
+                // often it is asked; only a broken line is worth another go.
+                if !last.network {
+                    break;
+                }
                 match retry_pause(attempt) {
                     Some(pause) => tokio::time::sleep(pause).await,
                     None => break,
@@ -367,6 +405,36 @@ async fn fetch_update(app: &AppHandle) -> Result<Option<Update>, String> {
         }
     }
     Err(last)
+}
+
+/// Why the check could not answer. The distinction is the whole point of the
+/// notice: "try again" is advice when the line dropped and a lie when the
+/// release feed itself is broken — no number of clicks will fix that one.
+struct CheckFailure {
+    message: String,
+    network: bool,
+}
+
+impl CheckFailure {
+    fn from_updater(e: &tauri_plugin_updater::Error) -> Self {
+        let network = matches!(
+            e,
+            tauri_plugin_updater::Error::Reqwest(_) | tauri_plugin_updater::Error::Network(_)
+        );
+        Self { message: e.to_string(), network }
+    }
+
+    fn other(message: String) -> Self {
+        Self { message, network: false }
+    }
+
+    fn notice(&self) -> &'static str {
+        if self.network {
+            "No connection — try again"
+        } else {
+            "Update check failed"
+        }
+    }
 }
 
 /// How long to wait before attempt `attempt + 1`, or `None` when the attempts
@@ -380,7 +448,7 @@ fn retry_pause(attempt: u32) -> Option<Duration> {
 /// Looks for a release and, if one is there, lights the tray. Not a command any
 /// more: updating lives in the menu-bar menu, so the window never asks for it.
 async fn check_for_update(app: &AppHandle) -> Result<Option<String>, String> {
-    match fetch_update(app).await? {
+    match fetch_update(app).await.map_err(|e| e.message)? {
         Some(update) => {
             debug_log::log(&format!("update: v{} available", update.version));
             announce_update(app, &update.version);
@@ -397,8 +465,11 @@ async fn check_for_update(app: &AppHandle) -> Result<Option<String>, String> {
 /// install action. Called from both the manual check and the background poll —
 /// one place, so a release found either way gives the user the same signal.
 fn announce_update(app: &AppHandle, version: &str) {
-    if let Some(item) = app.try_state::<UpdateItem>() {
-        let _ = item.0.set_text(format!("Update to v{}", version));
+    if let Some(state) = app.try_state::<UpdateItem>() {
+        if let Ok(mut found) = state.found.lock() {
+            *found = Some(version.to_string());
+        }
+        let _ = state.item.set_text(state.label());
     }
     if let Some(tray) = app.tray_by_id("tray") {
         if let Ok(icon) = tauri::image::Image::from_bytes(TRAY_UPDATE_ICON) {
@@ -411,6 +482,16 @@ fn announce_update(app: &AppHandle, version: &str) {
 /// version has been found. Two items would leave a dead "Check" sitting next to
 /// a live "Update".
 async fn on_update_clicked(app: AppHandle) {
+    // An install already running owns the click: a second download against the
+    // same target has both of them racing to restart the app mid-write.
+    let busy = app.try_state::<UpdateItem>().map(|state| {
+        state.busy.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err()
+    });
+    if busy == Some(true) {
+        debug_log::log("update: already working, click ignored");
+        return;
+    }
+
     match fetch_update(&app).await {
         Ok(Some(update)) => {
             let version = update.version.clone();
@@ -432,22 +513,25 @@ async fn on_update_clicked(app: AppHandle) {
             say_and_restore(&app, "Quill is up to date").await;
         }
         Err(e) => {
-            debug_log::log(&format!("update: check failed: {}", e));
-            say_and_restore(&app, "No connection — try again").await;
+            debug_log::log(&format!("update: check failed: {}", e.message));
+            say_and_restore(&app, e.notice()).await;
         }
+    }
+
+    if let Some(state) = app.try_state::<UpdateItem>() {
+        state.busy.store(false, Ordering::SeqCst);
     }
 }
 
 /// The menu item is where the click landed, so it is where the answer belongs:
 /// a tray app has no window to put a message in, and silence after a click
 /// reads as a broken updater. The item says what happened, then goes back to
-/// whatever it was offering.
+/// offering whatever it is currently able to offer.
 async fn say_and_restore(app: &AppHandle, notice: &str) {
-    let Some(item) = app.try_state::<UpdateItem>() else { return };
-    let Ok(before) = item.0.text() else { return };
-    let _ = item.0.set_text(notice);
+    let Some(state) = app.try_state::<UpdateItem>() else { return };
+    let _ = state.item.set_text(notice);
     tokio::time::sleep(UPDATE_NOTICE).await;
-    let _ = item.0.set_text(before);
+    let _ = state.item.set_text(state.label());
 }
 
 #[tauri::command]
@@ -1012,7 +1096,7 @@ pub fn run() {
             // right button is the way to the housekeeping — update, version,
             // quit. Nothing in the window asks for an update; this menu is the
             // only place it lives.
-            let update = MenuItemBuilder::with_id("update", "Check for updates").build(app)?;
+            let update = MenuItemBuilder::with_id("update", CHECK_LABEL).build(app)?;
             // The version is a way in, not a label: it opens the release list,
             // where every build says what changed in it. Deciding whether to
             // install an update used to mean going and finding that out.
@@ -1027,7 +1111,11 @@ pub fn run() {
                 .build()?;
 
             // announce_update() rewrites this item's text when a release lands.
-            app.manage(UpdateItem(update.clone()));
+            app.manage(UpdateItem {
+                item: update.clone(),
+                found: Mutex::new(None),
+                busy: AtomicBool::new(false),
+            });
 
             let mut tray_builder = TrayIconBuilder::with_id("tray")
                 .tooltip("Quill — polish your writing")
@@ -1129,6 +1217,20 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The notice restores what the item *should* be offering, not the text it
+    /// happened to replace. Two clicks inside the notice window used to make the
+    /// second one memorise the first one's notice and leave it there for good.
+    #[test]
+    fn the_item_goes_back_to_what_it_can_offer_not_to_what_it_said() {
+        assert_eq!(idle_label(None), CHECK_LABEL);
+        assert_eq!(idle_label(Some("0.1.55")), "Update to v0.1.55");
+        // Whatever a notice said, it is never what the item settles back to.
+        for notice in ["No connection — try again", "Quill is up to date", "Update check failed"] {
+            assert_ne!(idle_label(None), notice);
+            assert_ne!(idle_label(Some("0.1.55")), notice);
+        }
+    }
 
     /// One attempt per click is what made the updater look broken: the tunnel
     /// this machine reaches GitHub through drops the odd connection, and the

@@ -11,8 +11,11 @@
 //! so the realistic choice is keychain vs file; the file is the user's own
 //! credential on their own machine, written 0600 (owner read/write only).
 //!
-//! Public API is unchanged: at startup we load any stored keys into the process
-//! env, and corrector.rs keeps reading them via std::env::var(provider.env_var).
+//! Every read goes through `key_for`: the process env first (filled at startup,
+//! and where a dev override lands), the file behind it. Reading only the env
+//! was the bug — a key written after launch was reported as present by the
+//! settings screen and skipped as missing by the provider stack at the same
+//! time, until the app was restarted.
 
 use crate::debug_log;
 use std::path::{Path, PathBuf};
@@ -22,6 +25,12 @@ fn env_path() -> Option<PathBuf> {
 }
 
 fn read_file() -> String {
+    // Tests reach `key_for` through the provider stack; without this they read
+    // the installed app's real key file, which makes the result depend on
+    // whichever keys happen to be configured on the machine running them.
+    if cfg!(test) {
+        return String::new();
+    }
     env_path()
         .and_then(|p| std::fs::read_to_string(p).ok())
         .unwrap_or_default()
