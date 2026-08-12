@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.54 — 2026-08-12
+
 - A failed correction says what went wrong — "RouterAI is out of credit",
   "Groq timed out" — instead of the bare word "failed".
     - The provider's own wording is verbose, differs per vendor and echoes the
