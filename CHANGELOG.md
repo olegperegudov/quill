@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.56 — 2026-08-12
+
 - Clicking the update twice in a row no longer jams the menu item on a message,
   and no longer starts a second download alongside the first.
     - Review findings on the notice added in v0.1.55. The notice restored the
