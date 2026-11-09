@@ -3183,7 +3183,7 @@ dependencies = [
 
 [[package]]
 name = "quill"
-version = "0.1.54"
+version = "0.1.56"
 dependencies = [
  "arboard",
  "chrono",

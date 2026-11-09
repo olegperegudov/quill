@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+- Under the hood only: every part the app is built from is now locked to an exact, checked version, so a build can never pick up a newer one on its own.
+
 ## v0.1.56 — 2026-08-12
 
 - Clicking the update twice in a row no longer jams the menu item on a message,

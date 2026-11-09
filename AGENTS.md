@@ -11,7 +11,7 @@ behaviour, providers, signing, CI.
 
 Quick facts:
 
-- Run it: `npm install && npm run tauri dev`
+- Run it: `npm ci && npm run tauri dev`
 - Tests: `npm test` (vitest) and `cargo test --lib` in `src-tauri/`
 - The API key lives in a `0600` file written through `private.rs`; it is never
   logged, never sent to the frontend and never leaves the machine except to the
