@@ -9,6 +9,8 @@ stay here, out of the release.
 
 ## Unreleased
 
+## v0.1.57 — 2026-11-13
+
 - Under the hood only: every part the app is built from is now locked to an exact, checked version, so a build can never pick up a newer one on its own.
 
 ## v0.1.56 — 2026-08-12
